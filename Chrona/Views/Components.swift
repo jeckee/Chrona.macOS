@@ -59,7 +59,8 @@ struct PlanItemCard: View {
                 .buttonStyle(.plain)
 
                 Text(item.title)
-                    .font(.headline)
+                    .font(.title3)
+                    .fontWeight(.semibold)
                     .strikethrough(isCompleted)
                     .foregroundColor(isCompleted ? .secondary : .primary)
 
@@ -68,7 +69,7 @@ struct PlanItemCard: View {
                 if item.locked {
                     Image(systemName: "lock.fill")
                         .foregroundColor(.orange)
-                        .font(.caption)
+                        .font(.subheadline)
                 }
 
                 Button(action: {
@@ -82,9 +83,9 @@ struct PlanItemCard: View {
 
             HStack {
                 Image(systemName: "clock")
-                    .font(.caption)
+                    .font(.subheadline)
                 Text("\(formatTime(item.start)) - \(formatTime(item.end))")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
 
                 Button(action: {
@@ -93,7 +94,7 @@ struct PlanItemCard: View {
                     showTimeEditor = true
                 }) {
                     Image(systemName: "pencil.circle.fill")
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -101,7 +102,7 @@ struct PlanItemCard: View {
                 Spacer()
 
                 Text("\(duration(from: item.start, to: item.end)) 分钟")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
             }
             .popover(isPresented: $showTimeEditor, arrowEdge: .bottom) {
@@ -121,17 +122,18 @@ struct PlanItemCard: View {
 
             if !item.tips.isEmpty {
                 Divider()
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text("行动提示:")
-                        .font(.caption)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
                         .foregroundColor(.secondary)
 
                     ForEach(item.tips, id: \.self) { tip in
-                        HStack(alignment: .top, spacing: 4) {
+                        HStack(alignment: .top, spacing: 6) {
                             Text("•")
-                                .font(.caption)
+                                .font(.subheadline)
                             Text(tip)
-                                .font(.caption)
+                                .font(.subheadline)
                         }
                     }
                 }

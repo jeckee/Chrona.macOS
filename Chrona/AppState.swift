@@ -14,6 +14,12 @@ class AppState: ObservableObject {
         loadTasks()
         loadTodayPlan()
         loadTodaySummary()
+        
+        // 启动时重建提醒
+        if let plan = todayPlan {
+            NotificationManager.shared.cancelAllNotifications()
+            NotificationManager.shared.scheduleNotifications(for: plan.planItems)
+        }
     }
 
     // MARK: - Tasks
@@ -71,6 +77,17 @@ class AppState: ObservableObject {
         tasks.removeAll { $0.id == item.taskId }
         saveTasks()
         NotificationManager.shared.cancelNotifications(for: [item])
+    }
+
+    /// 从今日计划中移除无法安排的任务，并删除对应任务
+    func removeOverflowTask(_ overflow: OverflowTask) {
+        if var plan = todayPlan {
+            plan.overflowTasks.removeAll { $0.taskId == overflow.taskId }
+            todayPlan = plan
+            saveTodayPlan()
+        }
+        tasks.removeAll { $0.id == overflow.taskId }
+        saveTasks()
     }
 
     /// 修改计划项时间，保存计划并重建提醒
@@ -181,10 +198,16 @@ class AppState: ObservableObject {
     }
 
     private func validatePlan(planItems: [PlanItem], workingBlocks: [WorkingBlock]) -> String? {
-        let today = Date()
+        let now = Date()
+        let today = Calendar.current.startOfDay(for: now)
 
-        // 检查是否在工作时间段内
+        // 检查是否在工作时间段内，且不应在过去太久（允许 5 分钟误差）
         for item in planItems {
+            // 允许 5 分钟的宽限期，避免刚生成的计划立即失效
+            if item.end < now.addingTimeInterval(-300) {
+                return "任务 \(item.title) 的结束时间已过"
+            }
+            
             var isInWorkingBlock = false
             for block in workingBlocks {
                 if let range = block.toDateRange(on: today),

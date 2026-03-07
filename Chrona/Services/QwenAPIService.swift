@@ -37,8 +37,28 @@ class QwenAPIService {
 
         let timeFormatter = DateFormatter()
         timeFormatter.dateFormat = "HH:mm"
-
-        let workingBlocksStr = workingBlocks.map { "\($0.start)-\($0.end)" }.joined(separator: ", ")
+        
+        // 计算剩余可用工作时间段
+        let now = Date()
+        var validBlocks: [String] = []
+        
+        for block in workingBlocks {
+            guard let range = block.toDateRange(on: date) else { continue }
+            
+            if range.end <= now {
+                // 时间段已过，忽略
+                continue
+            } else if range.start <= now {
+                // 当前时间在此时间段内，从当前时间开始
+                let startStr = timeFormatter.string(from: now)
+                validBlocks.append("\(startStr)-\(block.end)")
+            } else {
+                // 将来的时间段，保持原样
+                validBlocks.append("\(block.start)-\(block.end)")
+            }
+        }
+        
+        let workingBlocksStr = validBlocks.isEmpty ? "无剩余工作时间" : validBlocks.joined(separator: ", ")
 
         var contextSection = ""
         if let existing = existingPlan, !existing.planItems.isEmpty {
@@ -67,16 +87,17 @@ class QwenAPIService {
         你是一个智能时间管理助手。请根据上下文和用户描述生成今日计划。
 
         **今日日期**: \(dateString)
-        **工作时间段**: \(workingBlocksStr)
+        **剩余可用工作时间段**: \(workingBlocksStr)
         \(contextSection)**用户今日描述（可选）**: \(inputSection)
 
         **要求**:
-        1. 若有「当前今日已有计划」，必须保留其中每一项（时间可微调避免重叠），再插入用户新描述的任务，输出合并后的完整 plan_items；每个已有项请保留原 task_id（若无法获知则生成新 UUID），新项生成新 UUID
-        2. 若有「昨日未完成的任务」，在今日工作时间内为它们安排时间，并可为用户描述的新目标预留空间；每项生成新 UUID
-        3. 若无上述上下文，则根据用户描述或工作日场景直接生成今日计划项
-        4. 每项包含 title、start(HH:mm)、end(HH:mm)、locked(默认 false)、tips(2-3 条)
-        5. 所有计划项必须安排在工作时间段内，且时间不得重叠
-        6. 无法安排的内容放入 overflow_tasks，填写 task_id、title、reason、suggestion
+        1. 请严格根据「剩余可用工作时间段」来安排任务。
+        2. 若有「当前今日已有计划」，必须保留其中每一项（时间可微调避免重叠），再插入用户新描述的任务，输出合并后的完整 plan_items；每个已有项请保留原 task_id（若无法获知则生成新 UUID），新项生成新 UUID
+        3. 若有「昨日未完成的任务」，在今日工作时间内为它们安排时间，并可为用户描述的新目标预留空间；每项生成新 UUID
+        4. 若无上述上下文，则根据用户描述或工作日场景直接生成今日计划项
+        5. 每项包含 title、start(HH:mm)、end(HH:mm)、locked(默认 false)、tips(2-3 条)
+        6. 所有计划项必须安排在工作时间段内，且时间不得重叠
+        7. 无法安排的内容放入 overflow_tasks，填写 task_id、title、reason、suggestion
 
         **输出格式**（必须是有效的 JSON）:
         {

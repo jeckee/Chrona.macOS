@@ -1,5 +1,6 @@
 import Foundation
 import UserNotifications
+import AppKit
 
 // MARK: - Notification Manager
 class NotificationManager: NSObject, ObservableObject {
@@ -27,23 +28,39 @@ class NotificationManager: NSObject, ObservableObject {
         center.getNotificationSettings { settings in
             DispatchQueue.main.async {
                 self.isAuthorized = settings.authorizationStatus == .authorized
+                
+                // 如果是第一次或者被拒绝了，且不是在请求中，可以记录状态
+                if settings.authorizationStatus == .denied {
+                    print("通知权限被拒绝，建议用户前往设置开启")
+                }
             }
+        }
+    }
+
+    func openSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
+            NSWorkspace.shared.open(url)
         }
     }
 
     // MARK: - Schedule Notifications
     func scheduleNotifications(for planItems: [PlanItem]) {
         let settings = SettingsManager.shared
+        let now = Date()
 
         for item in planItems {
             // 开始前提醒
             let startNotificationDate = item.start.addingTimeInterval(-Double(settings.notifyLeadMinutes * 60))
-            scheduleNotification(
-                id: "start-\(item.id.uuidString)",
-                title: "开始任务",
-                body: item.title,
-                date: startNotificationDate
-            )
+            
+            // 只调度未来的通知
+            if startNotificationDate > now {
+                scheduleNotification(
+                    id: "start-\(item.id.uuidString)",
+                    title: "开始任务",
+                    body: item.title,
+                    date: startNotificationDate
+                )
+            }
         }
     }
 

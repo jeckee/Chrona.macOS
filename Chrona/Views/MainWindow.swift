@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainWindow: View {
     @EnvironmentObject var appState: AppState
+    @ObservedObject private var notificationManager = NotificationManager.shared
     @State private var showSettings = false
     @State private var showPlanInputSheet = false
 
@@ -32,7 +33,7 @@ struct MainWindow: View {
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let plan = appState.todayPlan, !plan.planItems.isEmpty {
+            } else if let plan = appState.todayPlan, (!plan.planItems.isEmpty || !plan.overflowTasks.isEmpty) {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
                         ForEach(Array(plan.planItems.enumerated()), id: \.element.id) { index, item in
@@ -45,20 +46,30 @@ struct MainWindow: View {
                             Divider()
                                 .padding(.vertical, 8)
                             Text("无法安排的任务")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
+                                .font(.headline)
                                 .foregroundColor(.secondary)
 
                             ForEach(plan.overflowTasks, id: \.taskId) { overflow in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(overflow.title ?? "未安排项")
-                                        .font(.subheadline)
-                                    Text("原因: \(overflow.reason)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    Text("建议: \(overflow.suggestion)")
-                                        .font(.caption)
-                                        .foregroundColor(.blue)
+                                HStack(alignment: .top) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(overflow.title ?? "未安排项")
+                                            .font(.body)
+                                            .fontWeight(.medium)
+                                        Text("原因: \(overflow.reason)")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                        Text("建议: \(overflow.suggestion)")
+                                            .font(.subheadline)
+                                            .foregroundColor(.blue)
+                                    }
+                                    Spacer()
+                                    Button(action: {
+                                        appState.removeOverflowTask(overflow)
+                                    }) {
+                                        Image(systemName: "trash")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                                 .padding(12)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -70,13 +81,13 @@ struct MainWindow: View {
                         if let summary = appState.todaySummary {
                             Divider()
                                 .padding(.vertical, 8)
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 10) {
                                 Text("今日总结")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
+                                    .font(.headline)
                                     .foregroundColor(.secondary)
                                 Text(summary.text)
                                     .font(.body)
+                                    .lineSpacing(4)
                                     .padding()
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(Color.blue.opacity(0.1))
@@ -105,8 +116,21 @@ struct MainWindow: View {
             }
         }
         .background(.regularMaterial)
+        .onAppear {
+            notificationManager.checkAuthorization()
+        }
         .toolbar {
             ToolbarItemGroup {
+                if !notificationManager.isAuthorized {
+                    Button(action: {
+                        notificationManager.requestAuthorization()
+                    }) {
+                        Image(systemName: "bell.slash.fill")
+                            .foregroundColor(.red)
+                    }
+                    .help("通知权限未开启，点击开启")
+                }
+
                 Button("生成今日计划") {
                     showPlanInputSheet = true
                 }
@@ -138,15 +162,6 @@ struct MainWindow: View {
                     }
                 }
             })
-        }
-        .alert("错误", isPresented: .constant(appState.errorMessage != nil)) {
-            Button("确定") {
-                appState.errorMessage = nil
-            }
-        } message: {
-            if let error = appState.errorMessage {
-                Text(error)
-            }
         }
         .frame(minWidth: 560, minHeight: 500)
     }
@@ -211,5 +226,17 @@ struct PlanInputSheet: View {
         }
         .padding(24)
         .frame(width: 440, height: 400)
+        .alert("生成失败", isPresented: Binding(
+            get: { appState.errorMessage != nil },
+            set: { if !$0 { appState.errorMessage = nil } }
+        )) {
+            Button("确定") {
+                appState.errorMessage = nil
+            }
+        } message: {
+            if let error = appState.errorMessage {
+                Text(error)
+            }
+        }
     }
 }
