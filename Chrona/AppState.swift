@@ -133,8 +133,8 @@ class AppState: ObservableObject {
             let existingPlan: DayPlan? = (todayPlan != nil && !(todayPlan!.planItems.isEmpty)) ? todayPlan : nil
 
             // 新的一天（今日无计划）：把当前未完成的任务当作「昨日未完成」让 AI 重新安排
-            let carryOverTitles: [String] = existingPlan == nil
-                ? tasks.filter { $0.status == .todo }.map { $0.title }
+            let carryOverTasks: [(id: UUID, title: String)] = existingPlan == nil
+                ? tasks.filter { $0.status == .todo }.map { ($0.id, $0.title) }
                 : []
 
             let response = try await QwenAPIService.shared.generatePlan(
@@ -142,7 +142,7 @@ class AppState: ObservableObject {
                 workingBlocks: workingBlocks,
                 userInput: userInput,
                 existingPlan: existingPlan,
-                carryOverTitles: carryOverTitles
+                carryOverTasks: carryOverTasks
             )
 
             // 校验计划
@@ -164,6 +164,10 @@ class AppState: ObservableObject {
                 for t in tasks {
                     taskStatusById[t.id] = t.status
                 }
+                
+                // 收集 AI 返回的所有 ID
+                let returnedIds = Set(response.planItems.map { $0.taskId } + response.overflowTasks.map { $0.taskId })
+                
                 var newTasks = response.planItems.map { item in
                     Task(
                         id: item.taskId,
@@ -180,6 +184,19 @@ class AppState: ObservableObject {
                         status: taskStatusById[overflow.taskId] ?? .todo
                     )
                 }
+                
+                // 检查 carryOverTasks 中是否有遗漏的，如果有，加回 newTasks
+                for (id, title) in carryOverTasks {
+                    if !returnedIds.contains(id) {
+                         newTasks.append(Task(
+                            id: id,
+                            raw: title,
+                            title: title,
+                            status: .todo
+                         ))
+                    }
+                }
+                
                 tasks = newTasks
                 saveTasks()
 

@@ -14,16 +14,16 @@ class QwenAPIService {
     // MARK: - Generate Plan
     /// - Parameters:
     ///   - existingPlan: 今日已有计划（非空时表示在现有计划基础上插入/合并新内容）
-    ///   - carryOverTitles: 昨日未完成的任务标题列表（新的一天时传入，用于重新安排）
+    ///   - carryOverTasks: 昨日未完成的任务（包含 id 和 title，新的一天时传入，用于重新安排）
     func generatePlan(
         date: Date,
         workingBlocks: [WorkingBlock],
         userInput: String,
         existingPlan: DayPlan? = nil,
-        carryOverTitles: [String] = []
+        carryOverTasks: [(id: UUID, title: String)] = []
     ) async throws -> GeneratePlanResponse {
         let logDateStr = Self.logDateFormatter.string(from: date)
-        logger.info("[generatePlan] 开始 date=\(logDateStr, privacy: .public) workingBlocks=\(workingBlocks.count, privacy: .public) existingPlan=\(existingPlan != nil, privacy: .public) carryOver=\(carryOverTitles.count, privacy: .public)")
+        logger.info("[generatePlan] 开始 date=\(logDateStr, privacy: .public) workingBlocks=\(workingBlocks.count, privacy: .public) existingPlan=\(existingPlan != nil, privacy: .public) carryOver=\(carryOverTasks.count, privacy: .public)")
 
         let apiKey = SettingsManager.shared.qwenAPIKey
         guard !apiKey.isEmpty else {
@@ -70,10 +70,10 @@ class QwenAPIService {
             \(itemsDesc)
 
             """
-        } else if !carryOverTitles.isEmpty {
-            let carryStr = carryOverTitles.map { "  - \($0)" }.joined(separator: "\n")
+        } else if !carryOverTasks.isEmpty {
+            let carryStr = carryOverTasks.map { "  - task_id: \($0.id.uuidString), \($0.title)" }.joined(separator: "\n")
             contextSection = """
-            **昨日未完成的任务**（请在今日工作时间内重新安排这些任务）:
+            **昨日未完成的任务**（请在今日工作时间内重新安排这些任务，必须复用提供的 task_id）:
             \(carryStr)
 
             """
@@ -93,7 +93,7 @@ class QwenAPIService {
         **要求**:
         1. 请严格根据「剩余可用工作时间段」来安排任务。
         2. 若有「当前今日已有计划」，必须保留其中每一项（时间可微调避免重叠），再插入用户新描述的任务，输出合并后的完整 plan_items；每个已有项请保留原 task_id（若无法获知则生成新 UUID），新项生成新 UUID
-        3. 若有「昨日未完成的任务」，在今日工作时间内为它们安排时间，并可为用户描述的新目标预留空间；每项生成新 UUID
+        3. 若有「昨日未完成的任务」，在今日工作时间内为它们安排时间，并可为用户描述的新目标预留空间；**必须复用提供的 task_id**；若无法安排，必须放入 overflow_tasks 并同样复用 task_id
         4. 若无上述上下文，则根据用户描述或工作日场景直接生成今日计划项
         5. 每项包含 title、start(HH:mm)、end(HH:mm)、locked(默认 false)、tips(2-3 条)
         6. 所有计划项必须安排在工作时间段内，且时间不得重叠

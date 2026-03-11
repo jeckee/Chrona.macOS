@@ -147,7 +147,7 @@ struct MenuBarView: View {
                         }
                         .padding(.vertical, 4)
                     }
-                    .frame(maxHeight: 300)
+                    .frame(maxHeight: 500)
                 } else if let plan = appState.todayPlan, !(plan.planItems.isEmpty && plan.overflowTasks.isEmpty) {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 10) {
@@ -189,7 +189,7 @@ struct MenuBarView: View {
                         }
                         .padding(.vertical, 4)
                     }
-                    .frame(maxHeight: 300)
+                    .frame(maxHeight: 500)
                 } else {
                     Text("暂无任务内容，可先在主窗口添加任务或生成今日计划")
                         .font(.subheadline)
@@ -200,7 +200,7 @@ struct MenuBarView: View {
             Divider()
 
             // 操作按钮
-            VStack(spacing: 8) {
+            HStack(spacing: 12) {
                 Button("生成今日计划") {
                     _Concurrency.Task {
                         await appState.generatePlan(userInput: "")
