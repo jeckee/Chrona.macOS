@@ -8,18 +8,24 @@ class AppState: ObservableObject {
     @Published var todaySummary: DaySummary?
     @Published var isGeneratingPlan = false
     @Published var isGeneratingSummary = false
+    @Published var isGeneratingClues = false
     @Published var errorMessage: String?
+
+    private var summaryTimer: Timer?
 
     init() {
         loadTasks()
         loadTodayPlan()
         loadTodaySummary()
-        
+
         // 启动时重建提醒
         if let plan = todayPlan {
             NotificationManager.shared.cancelAllNotifications()
             NotificationManager.shared.scheduleNotifications(for: plan.planItems)
         }
+
+        // 启动定时总结
+        setupAutoSummary()
     }
 
     // MARK: - Tasks
@@ -119,6 +125,52 @@ class AppState: ObservableObject {
         }
     }
 
+    /// 根据当前顺序自动重新排布时间段（保持每个任务的时长不变）
+    private func recalculatePlanTimes(for plan: inout DayPlan) {
+        guard !plan.planItems.isEmpty else { return }
+
+        var items = plan.planItems
+
+        // 以当前第一个任务的开始时间为基准，后面任务依次顺延
+        var currentStart = items[0].start
+        for index in 0..<items.count {
+            let duration = items[index].end.timeIntervalSince(items[index].start)
+            items[index].start = currentStart
+            items[index].end = currentStart.addingTimeInterval(duration)
+            currentStart = items[index].end
+        }
+
+        plan.planItems = items
+    }
+
+    /// 将计划项上移一位
+    func movePlanItemUp(_ item: PlanItem) {
+        guard var plan = todayPlan,
+              let index = plan.planItems.firstIndex(where: { $0.id == item.id }),
+              index > 0 else { return }
+
+        plan.planItems.swapAt(index, index - 1)
+        recalculatePlanTimes(for: &plan)
+        todayPlan = plan
+        saveTodayPlan()
+        NotificationManager.shared.cancelAllNotifications()
+        NotificationManager.shared.scheduleNotifications(for: plan.planItems)
+    }
+
+    /// 将计划项下移一位
+    func movePlanItemDown(_ item: PlanItem) {
+        guard var plan = todayPlan,
+              let index = plan.planItems.firstIndex(where: { $0.id == item.id }),
+              index < plan.planItems.count - 1 else { return }
+
+        plan.planItems.swapAt(index, index + 1)
+        recalculatePlanTimes(for: &plan)
+        todayPlan = plan
+        saveTodayPlan()
+        NotificationManager.shared.cancelAllNotifications()
+        NotificationManager.shared.scheduleNotifications(for: plan.planItems)
+    }
+
     func generatePlan(userInput: String = "") async {
         await MainActor.run {
             isGeneratingPlan = true
@@ -200,10 +252,7 @@ class AppState: ObservableObject {
                 tasks = newTasks
                 saveTasks()
 
-                // 重建通知
-                NotificationManager.shared.cancelAllNotifications()
-                NotificationManager.shared.scheduleNotifications(for: response.planItems)
-
+                // 不在生成今日计划时自动创建通知，只更新计划与任务列表
                 isGeneratingPlan = false
             }
         } catch {
@@ -288,5 +337,88 @@ class AppState: ObservableObject {
                 isGeneratingSummary = false
             }
         }
+    }
+
+    // MARK: - Clues
+    func generateClues(for task: Task) async {
+        await MainActor.run {
+            isGeneratingClues = true
+            errorMessage = nil
+        }
+
+        do {
+            var accumulatedClues = ""
+
+            try await QwenAPIService.shared.generateClues(
+                taskTitle: task.title,
+                taskDescription: task.raw
+            ) { chunk in
+                _Concurrency.Task { @MainActor in
+                    accumulatedClues += chunk
+                    // 更新任务的线索
+                    if let index = self.tasks.firstIndex(where: { $0.id == task.id }) {
+                        self.tasks[index].clues = accumulatedClues
+                    }
+                }
+            }
+
+            await MainActor.run {
+                saveTasks()
+                isGeneratingClues = false
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                isGeneratingClues = false
+            }
+        }
+    }
+
+    // MARK: - Auto Summary
+    private func setupAutoSummary() {
+        // 取消旧的定时器
+        summaryTimer?.invalidate()
+
+        guard SettingsManager.shared.autoSummaryEnabled else { return }
+
+        // 解析设置的时间
+        let timeString = SettingsManager.shared.autoSummaryTime
+        let components = timeString.split(separator: ":").compactMap { Int($0) }
+        guard components.count == 2 else { return }
+
+        let hour = components[0]
+        let minute = components[1]
+
+        // 计算下次触发时间
+        let calendar = Calendar.current
+        let now = Date()
+        var dateComponents = calendar.dateComponents([.year, .month, .day], from: now)
+        dateComponents.hour = hour
+        dateComponents.minute = minute
+        dateComponents.second = 0
+
+        guard var targetDate = calendar.date(from: dateComponents) else { return }
+
+        // 如果今天的时间已过，设置为明天
+        if targetDate <= now {
+            targetDate = calendar.date(byAdding: .day, value: 1, to: targetDate) ?? targetDate
+        }
+
+        let timeInterval = targetDate.timeIntervalSince(now)
+
+        // 设置定时器
+        summaryTimer = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: false) { [weak self] _ in
+            _Concurrency.Task {
+                await self?.generateSummary()
+                // 生成后重新设置下一次定时器（明天同一时间）
+                await MainActor.run {
+                    self?.setupAutoSummary()
+                }
+            }
+        }
+    }
+
+    func resetAutoSummary() {
+        setupAutoSummary()
     }
 }

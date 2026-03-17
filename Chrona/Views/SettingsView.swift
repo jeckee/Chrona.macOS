@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @StateObject private var settings = SettingsManager.shared
+    @EnvironmentObject var appState: AppState
     @State private var apiKey = ""
     @State private var showAPIKey = false
     @Environment(\.dismiss) var dismiss
@@ -114,6 +115,35 @@ struct SettingsView: View {
                                     .textFieldStyle(.roundedBorder)
                                     .frame(width: 60)
                                 Text("分钟")
+                            }
+                        }
+                        .padding()
+                    }
+
+                    // 自动总结设置
+                    GroupBox {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("自动总结")
+                                .font(.headline)
+
+                            Toggle("启用每日自动总结", isOn: $settings.autoSummaryEnabled)
+                                .onChange(of: settings.autoSummaryEnabled) { _ in
+                                    appState.resetAutoSummary()
+                                }
+
+                            if settings.autoSummaryEnabled {
+                                HStack {
+                                    Text("总结时间:")
+                                    TextField("HH:mm", text: $settings.autoSummaryTime)
+                                        .textFieldStyle(.roundedBorder)
+                                        .frame(width: 80)
+                                        .onChange(of: settings.autoSummaryTime) { _ in
+                                            appState.resetAutoSummary()
+                                        }
+                                    Text("(24小时制，例如: 20:00)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
                         }
                         .padding()

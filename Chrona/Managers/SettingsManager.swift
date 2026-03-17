@@ -7,6 +7,8 @@ class SettingsManager: ObservableObject {
 
     @AppStorage("workingBlocks") private var workingBlocksData: Data = Data()
     @AppStorage("notifyLeadMinutes") var notifyLeadMinutes: Int = 5
+    @AppStorage("autoSummaryEnabled") var autoSummaryEnabled: Bool = true
+    @AppStorage("autoSummaryTime") var autoSummaryTime: String = "20:00"
     @AppStorage("qwenAPIKey") var qwenAPIKey: String = ""
 
     @Published var workingBlocks: [WorkingBlock] = []

@@ -8,21 +8,31 @@ struct Task: Identifiable, Codable {
     var estimateMin: Int?
     var fixedStart: Date?
     var fixedEnd: Date?
+    var priority: TaskPriority?
     var status: TaskStatus
+    var clues: String? // AI 提供的线索和资源
 
     enum TaskStatus: String, Codable {
         case todo
         case done
     }
 
-    init(id: UUID = UUID(), raw: String, title: String? = nil, estimateMin: Int? = nil, fixedStart: Date? = nil, fixedEnd: Date? = nil, status: TaskStatus = .todo) {
+    enum TaskPriority: String, Codable {
+        case high = "高"
+        case medium = "中"
+        case low = "低"
+    }
+
+    init(id: UUID = UUID(), raw: String, title: String? = nil, estimateMin: Int? = nil, fixedStart: Date? = nil, fixedEnd: Date? = nil, priority: TaskPriority? = nil, status: TaskStatus = .todo, clues: String? = nil) {
         self.id = id
         self.raw = raw
         self.title = title ?? raw
         self.estimateMin = estimateMin
         self.fixedStart = fixedStart
         self.fixedEnd = fixedEnd
+        self.priority = priority
         self.status = status
+        self.clues = clues
     }
 }
 

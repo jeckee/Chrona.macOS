@@ -42,40 +42,42 @@ struct MainWindow: View {
                                 .animation(.easeOut(duration: 0.3).delay(Double(index) * 0.1), value: plan.planItems.count)
                         }
 
-                        if !plan.overflowTasks.isEmpty {
-                            Divider()
-                                .padding(.vertical, 8)
-                            Text("无法安排的任务")
-                                .font(.headline)
-                                .foregroundColor(.secondary)
-
-                            ForEach(plan.overflowTasks, id: \.taskId) { overflow in
-                                HStack(alignment: .top) {
-                                    VStack(alignment: .leading, spacing: 6) {
+                        // 将无法安排的任务直接放在今日计划列表之后展示（同一个列表中）
+                        ForEach(plan.overflowTasks, id: \.taskId) { overflow in
+                            HStack(alignment: .top, spacing: 8) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack(spacing: 6) {
                                         Text(overflow.title ?? "未安排项")
                                             .font(.body)
                                             .fontWeight(.medium)
-                                        Text("原因: \(overflow.reason)")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                        Text("建议: \(overflow.suggestion)")
-                                            .font(.subheadline)
-                                            .foregroundColor(.blue)
+                                        Text("未安排")
+                                            .font(.caption)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.orange.opacity(0.2))
+                                            .foregroundColor(.orange)
+                                            .cornerRadius(4)
                                     }
-                                    Spacer()
-                                    Button(action: {
-                                        appState.removeOverflowTask(overflow)
-                                    }) {
-                                        Image(systemName: "trash")
-                                            .foregroundColor(.red)
-                                    }
-                                    .buttonStyle(.plain)
+                                    Text("原因: \(overflow.reason)")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    Text("建议: \(overflow.suggestion)")
+                                        .font(.subheadline)
+                                        .foregroundColor(.blue)
                                 }
-                                .padding(12)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.orange.opacity(0.1))
-                                .cornerRadius(8)
+                                Spacer()
+                                Button(action: {
+                                    appState.removeOverflowTask(overflow)
+                                }) {
+                                    Image(systemName: "trash")
+                                        .foregroundColor(.red)
+                                }
+                                .buttonStyle(.plain)
                             }
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.orange.opacity(0.08))
+                            .cornerRadius(10)
                         }
 
                         if let summary = appState.todaySummary {

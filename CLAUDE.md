@@ -60,14 +60,18 @@ Chrona 是一个 macOS 菜单栏常驻的时间管理应用，使用 Qwen AI 进
 }
 ```
 
-### AI 集成（Qwen3-Max）
+### AI 集成（Qwen API）
+
+API 端点：`https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`
 
 需要实现两个 API 调用：
 
 1. **generatePlan**：生成今日计划
+   - 模型：qwen-max 或 qwen-plus
    - 输入：日期、工作时间段、任务列表
    - 输出：plan_items（含 tips）+ overflow_tasks
    - 必须返回 JSON 格式
+   - 使用 response_format: { type: "json_object" } 确保 JSON 输出
 
 2. **generateSummary**：生成每日总结
    - 输入：plan_items、完成情况、overflow_tasks
@@ -95,24 +99,33 @@ Chrona 是一个 macOS 菜单栏常驻的时间管理应用，使用 Qwen AI 进
 
 ## 开发命令
 
-### 构建和运行
+### 快速开始
 
-使用 Xcode：
+```bash
+# 快速运行（推荐）
+./run.sh
+
+# Release 构建
+./build.sh
+```
+
+### 使用 Xcode
+
 ```bash
 # 打开项目
 open Chrona.xcodeproj
 
-# 或使用命令行构建
-xcodebuild -project Chrona.xcodeproj -scheme Chrona -configuration Debug build
-
-# 运行
-xcodebuild -project Chrona.xcodeproj -scheme Chrona -configuration Debug run
+# 在 Xcode 中按 ⌘R 运行
 ```
 
-使用 xcodebuild：
+### 使用 xcodebuild
+
 ```bash
 # Debug 构建
 xcodebuild -project Chrona.xcodeproj -scheme Chrona -configuration Debug build
+
+# 运行 Debug 构建
+open ~/Library/Developer/Xcode/DerivedData/Chrona-*/Build/Products/Debug/Chrona.app
 
 # Release 构建
 xcodebuild -project Chrona.xcodeproj -scheme Chrona -configuration Release build
@@ -150,3 +163,10 @@ Chrona/
 3. **JSON 解析容错**：AI 返回解析失败时提示用户并记录原始响应
 4. **通知权限**：首次使用提醒功能时请求通知权限
 5. **多行任务输入**：支持在 TextEditor 中每行输入一个任务
+
+## 项目文件说明
+
+- `run.sh`：快速运行脚本（Debug 模式）
+- `build.sh`：Release 构建脚本（带交互式运行选项）
+- `Chrona.entitlements`：应用权限配置
+- `Info.plist`：应用元数据配置

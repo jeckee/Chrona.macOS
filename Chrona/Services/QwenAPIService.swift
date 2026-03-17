@@ -67,7 +67,7 @@ class QwenAPIService {
             }.joined(separator: "\n")
             contextSection = """
             **当前今日已有计划**（请保留这些项并沿用其 task_id，在空档或合理位置插入用户新描述的任务，输出合并后的完整 plan_items）:
-            \(itemsDesc)
+            \(itemsDesc)        
 
             """
         } else if !carryOverTasks.isEmpty {
@@ -183,6 +183,84 @@ class QwenAPIService {
 
         logger.info("[generatePlan] 成功 planItems=\(planItems.count, privacy: .public) overflowTasks=\(overflowTasks.count, privacy: .public)")
         return GeneratePlanResponse(planItems: planItems, overflowTasks: overflowTasks)
+    }
+
+    // MARK: - Generate Clues
+    /// 为任务生成线索和资源建议（流式输出）
+    func generateClues(
+        taskTitle: String,
+        taskDescription: String,
+        onChunk: @escaping (String) -> Void
+    ) async throws {
+        let apiKey = SettingsManager.shared.qwenAPIKey
+        guard !apiKey.isEmpty else {
+            logger.error("[generateClues] 失败: 未配置 API Key")
+            throw APIError.missingAPIKey
+        }
+
+        let prompt = """
+        用户有一个任务需要完成，请为这个任务提供相关的线索、资源和建议。
+
+        任务标题：\(taskTitle)
+        任务描述：\(taskDescription)
+
+        请提供：
+        1. 完成这个任务的关键步骤或思路
+        2. 可能需要的工具、技术或资源
+        3. 相关的参考文档或学习资料建议
+        4. 可能遇到的问题和解决方案
+
+        请用简洁、实用的方式回答，直接给出可操作的建议。
+        """
+
+        let requestBody: [String: Any] = [
+            "model": model,
+            "messages": [
+                ["role": "user", "content": prompt]
+            ],
+            "stream": true
+        ]
+
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: requestBody),
+              let url = URL(string: "\(baseURL)/chat/completions") else {
+            throw APIError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = jsonData
+
+        let (asyncBytes, response) = try await URLSession.shared.bytes(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.networkError
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            logger.error("[generateClues] HTTP 错误: \(httpResponse.statusCode)")
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+
+        // 处理流式响应
+        for try await line in asyncBytes.lines {
+            if line.hasPrefix("data: ") {
+                let data = line.dropFirst(6)
+                if data == "[DONE]" {
+                    break
+                }
+
+                if let jsonData = data.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                   let choices = json["choices"] as? [[String: Any]],
+                   let firstChoice = choices.first,
+                   let delta = firstChoice["delta"] as? [String: Any],
+                   let content = delta["content"] as? String {
+                    onChunk(content)
+                }
+            }
+        }
     }
 
     // MARK: - Generate Summary
