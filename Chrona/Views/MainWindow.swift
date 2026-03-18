@@ -101,6 +101,8 @@ struct MainWindow: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
+                let totalTasks = appState.tasks.count
+                let remainingTasks = appState.tasks.filter { $0.status != .done }.count
                 VStack(spacing: 20) {
                     Spacer()
                     Image(systemName: "calendar.badge.clock")
@@ -109,6 +111,12 @@ struct MainWindow: View {
                     Text("还没有生成今日计划")
                         .font(.title3)
                         .foregroundColor(.secondary)
+                    
+                    if totalTasks > 0 {
+                        Text("任务池里还有 \(remainingTasks) 个未完成（共 \(totalTasks) 个）")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
                     Text("点击「生成今日计划」开始")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
@@ -118,6 +126,15 @@ struct MainWindow: View {
             }
         }
         .background(.regularMaterial)
+        // 给 SwiftUI WindowGroup 对应的 NSWindow 打上固定标识，便于单例复用/置前
+        .background(
+            WindowAccessor { window in
+                if window.identifier?.rawValue != WindowIDs.main {
+                    window.identifier = NSUserInterfaceItemIdentifier(WindowIDs.main)
+                }
+                window.isReleasedWhenClosed = false
+            }
+        )
         .onAppear {
             notificationManager.checkAuthorization()
         }

@@ -19,6 +19,7 @@
 		AA0010 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0010 /* SettingsView.swift */; };
 		AA0011 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0011 /* MenuBarView.swift */; };
 		AA0012 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0012 /* Components.swift */; };
+		AA0013 /* WindowUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0013 /* WindowUtils.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +36,7 @@
 		BB0010 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		BB0011 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		BB0012 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		BB0013 /* WindowUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowUtils.swift; sourceTree = "<group>"; };
 		DD0001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		DD0002 /* Chrona.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Chrona.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -115,6 +117,7 @@
 				BB0010 /* SettingsView.swift */,
 				BB0011 /* MenuBarView.swift */,
 				BB0012 /* Components.swift */,
+				BB0013 /* WindowUtils.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -199,6 +202,7 @@
 				AA0010 /* SettingsView.swift in Sources */,
 				AA0011 /* MenuBarView.swift in Sources */,
 				AA0012 /* Components.swift in Sources */,
+				AA0013 /* WindowUtils.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -60,12 +60,7 @@ struct MenuBarView: View {
                     Text("任务列表")
                         .font(.headline)
                     Spacer()
-                    if !appState.tasks.isEmpty {
-                        let completedCount = appState.tasks.filter { $0.status == .done }.count
-                        Text("已完成 \(completedCount)/\(appState.tasks.count)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    } else if let plan = appState.todayPlan {
+                    if let plan = appState.todayPlan, !(plan.planItems.isEmpty && plan.overflowTasks.isEmpty) {
                         let totalCount = plan.planItems.count + plan.overflowTasks.count
                         Text("共 \(totalCount) 项")
                             .font(.caption)
@@ -73,82 +68,7 @@ struct MenuBarView: View {
                     }
                 }
 
-                if !appState.tasks.isEmpty {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(appState.tasks) { task in
-                                let planItem = appState.todayPlan?.planItems.first(where: { $0.taskId == task.id })
-                                let overflowTask = appState.todayPlan?.overflowTasks.first(where: { $0.taskId == task.id })
-                                
-                                HStack(spacing: 8) {
-                                    Button(action: {
-                                        appState.toggleTaskStatus(task)
-                                    }) {
-                                        Image(systemName: task.status == .done ? "checkmark.circle.fill" : "circle")
-                                            .foregroundColor(task.status == .done ? .green : .secondary)
-                                            .font(.system(size: 14))
-                                    }
-                                    .buttonStyle(.plain)
-                                    
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(task.title)
-                                            .font(.subheadline)
-                                            .fontWeight(.medium)
-                                            .lineLimit(1)
-                                            .strikethrough(task.status == .done)
-                                            .foregroundColor(task.status == .done ? .secondary : .primary)
-                                        
-                                        if let item = planItem {
-                                            Text("\(formatTime(item.start)) - \(formatTime(item.end))")
-                                                .font(.caption2)
-                                                .foregroundColor(.secondary)
-                                        } else if let overflow = overflowTask {
-                                            Text("无法安排: \(overflow.reason)")
-                                                .font(.caption2)
-                                                .foregroundColor(.orange)
-                                        } else if let fixedStart = task.fixedStart, let fixedEnd = task.fixedEnd {
-                                            Text("固定时段: \(formatTime(fixedStart)) - \(formatTime(fixedEnd))")
-                                                .font(.caption2)
-                                                .foregroundColor(.secondary)
-                                        }
-
-                                        if let estimateMin = task.estimateMin {
-                                            Text("预计时长: \(estimateMin) 分钟")
-                                                .font(.caption2)
-                                                .foregroundColor(.secondary)
-                                        }
-
-                                        if task.raw != task.title {
-                                            Text(task.raw)
-                                                .font(.caption2)
-                                                .foregroundColor(.secondary)
-                                                .lineLimit(1)
-                                        }
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    Button(action: {
-                                        if let item = planItem {
-                                            appState.removePlanItemFromPlan(item)
-                                        } else if let overflow = overflowTask {
-                                            appState.removeOverflowTask(overflow)
-                                        } else {
-                                            appState.deleteTask(task)
-                                        }
-                                    }) {
-                                        Image(systemName: "trash")
-                                            .foregroundColor(.red)
-                                            .font(.system(size: 12))
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                    .frame(maxHeight: 500)
-                } else if let plan = appState.todayPlan, !(plan.planItems.isEmpty && plan.overflowTasks.isEmpty) {
+                if let plan = appState.todayPlan, !(plan.planItems.isEmpty && plan.overflowTasks.isEmpty) {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(plan.planItems) { item in
@@ -220,8 +140,12 @@ struct MenuBarView: View {
                 .disabled(appState.isGeneratingSummary || appState.todayPlan == nil)
 
                 Button("打开主窗口") {
-                    openWindow(id: "main")
-                    NSApp.activate(ignoringOtherApps: true)
+                    if !WindowManager.bringToFront(id: WindowIDs.main) {
+                        openWindow(id: WindowIDs.main)
+                        DispatchQueue.main.async {
+                            _ = WindowManager.bringToFront(id: WindowIDs.main)
+                        }
+                    }
                 }
                 .buttonStyle(.bordered)
                 .frame(maxWidth: .infinity)
