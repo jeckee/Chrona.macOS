@@ -116,6 +116,9 @@ struct SettingsView: View {
                                     .frame(width: 60)
                                 Text("分钟")
                             }
+                            .onChange(of: settings.notifyLeadMinutes) { _ in
+                                appState.refreshTodayPlanNotifications()
+                            }
                         }
                         .padding()
                     }

@@ -52,27 +52,22 @@ struct TaskRow: View {
 struct PlanItemCard: View {
     @EnvironmentObject var appState: AppState
     let item: PlanItem
+    let task: Task?
     @State private var showTaskDetail = false
+    @State private var showConclusionEditor = false
+    @State private var conclusionDraft = ""
 
     private var isCompleted: Bool {
-        appState.taskStatus(for: item.taskId) == .done
+        taskStatus == .done
     }
 
-    private var task: Task? {
-        appState.tasks.first(where: { $0.id == item.taskId })
+    private var taskStatus: Task.TaskStatus {
+        task?.status ?? .todo
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Button(action: {
-                    appState.completePlanItem(item)
-                }) {
-                    Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isCompleted ? .green : .secondary)
-                }
-                .buttonStyle(.plain)
-
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.title)
                         .font(.title3)
@@ -94,6 +89,10 @@ struct PlanItemCard: View {
                                 .cornerRadius(4)
                         }
                     }
+
+                    Text(statusText(taskStatus))
+                        .font(.caption)
+                        .foregroundColor(statusColor(taskStatus))
                 }
 
                 Spacer()
@@ -105,7 +104,7 @@ struct PlanItemCard: View {
                 }
 
                 Button(action: {
-                    if let task = task {
+                    if task != nil {
                         showTaskDetail = true
                     }
                 }) {
@@ -136,6 +135,32 @@ struct PlanItemCard: View {
                 .menuStyle(.borderlessButton)
             }
 
+            HStack(spacing: 8) {
+                Button("开始") {
+                    appState.startTask(taskId: item.taskId)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(taskStatus == .inProgress || taskStatus == .done)
+
+                Button("暂停") {
+                    appState.pauseTask(taskId: item.taskId)
+                }
+                .buttonStyle(.bordered)
+                .disabled(taskStatus == .paused || taskStatus == .done)
+
+                Button("完成") {
+                    appState.completeTask(taskId: item.taskId)
+                }
+                .buttonStyle(.bordered)
+                .disabled(taskStatus == .done)
+
+                Button(task?.conclusion?.isEmpty == false ? "编辑结论" : "添加结论") {
+                    conclusionDraft = task?.conclusion ?? ""
+                    showConclusionEditor = true
+                }
+                .buttonStyle(.bordered)
+            }
+
             HStack {
                 Image(systemName: "clock")
                     .font(.subheadline)
@@ -163,12 +188,20 @@ struct PlanItemCard: View {
                     .environmentObject(appState)
             }
         }
+        .sheet(isPresented: $showConclusionEditor) {
+            TaskConclusionSheet(
+                title: item.title,
+                conclusionText: $conclusionDraft,
+                onSave: { text in
+                    appState.updateTaskConclusion(taskId: item.taskId, conclusion: text)
+                    showConclusionEditor = false
+                }
+            )
+        }
     }
 
     private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        PlanItemCard.timeFormatter.string(from: date)
     }
 
     private func duration(from start: Date, to end: Date) -> Int {
@@ -182,6 +215,38 @@ struct PlanItemCard: View {
         case .low: return .green
         }
     }
+
+    private func statusText(_ status: Task.TaskStatus) -> String {
+        switch status {
+        case .todo:
+            return "待开始"
+        case .inProgress:
+            return "进行中"
+        case .paused:
+            return "已暂停"
+        case .done:
+            return "已完成"
+        }
+    }
+
+    private func statusColor(_ status: Task.TaskStatus) -> Color {
+        switch status {
+        case .todo:
+            return .secondary
+        case .inProgress:
+            return .blue
+        case .paused:
+            return .orange
+        case .done:
+            return .green
+        }
+    }
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
 }
 
 // MARK: - Task Detail View
@@ -246,9 +311,9 @@ struct TaskDetailView: View {
                     Text("状态:")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-                    Text(task.status == .done ? "已完成" : "待完成")
+                    Text(statusText(task.status))
                         .font(.subheadline)
-                        .foregroundColor(task.status == .done ? .green : .orange)
+                        .foregroundColor(statusColor(task.status))
                 }
 
                 if task.raw != task.title {
@@ -261,6 +326,20 @@ struct TaskDetailView: View {
                             .padding(8)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color(NSColor.controlBackgroundColor))
+                            .cornerRadius(6)
+                    }
+                }
+
+                if let conclusion = task.conclusion, !conclusion.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("任务结论:")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Text(conclusion)
+                            .font(.subheadline)
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.green.opacity(0.08))
                             .cornerRadius(6)
                     }
                 }
@@ -332,5 +411,71 @@ struct TaskDetailView: View {
         case .medium: return .orange
         case .low: return .green
         }
+    }
+
+    private func statusText(_ status: Task.TaskStatus) -> String {
+        switch status {
+        case .todo:
+            return "待开始"
+        case .inProgress:
+            return "进行中"
+        case .paused:
+            return "已暂停"
+        case .done:
+            return "已完成"
+        }
+    }
+
+    private func statusColor(_ status: Task.TaskStatus) -> Color {
+        switch status {
+        case .todo:
+            return .orange
+        case .inProgress:
+            return .blue
+        case .paused:
+            return .orange
+        case .done:
+            return .green
+        }
+    }
+}
+
+struct TaskConclusionSheet: View {
+    @Environment(\.dismiss) var dismiss
+    let title: String
+    @Binding var conclusionText: String
+    let onSave: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("任务结论")
+                .font(.title3)
+                .fontWeight(.semibold)
+
+            Text(title)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            TextEditor(text: $conclusionText)
+                .font(.system(size: 14))
+                .frame(minHeight: 160)
+                .padding(8)
+                .background(Color(NSColor.textBackgroundColor))
+                .cornerRadius(8)
+
+            HStack {
+                Spacer()
+                Button("取消") {
+                    dismiss()
+                }
+                Button("保存") {
+                    onSave(conclusionText)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(20)
+        .frame(width: 420, height: 300)
     }
 }

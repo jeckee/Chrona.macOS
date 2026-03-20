@@ -12,6 +12,12 @@ class AppState: ObservableObject {
     @Published var errorMessage: String?
 
     private var summaryTimer: Timer?
+    func refreshTodayPlanNotifications() {
+        NotificationManager.shared.cancelAllNotifications()
+        if let plan = todayPlan {
+            NotificationManager.shared.scheduleNotifications(for: plan.planItems)
+        }
+    }
 
     init() {
         loadTasks()
@@ -19,10 +25,7 @@ class AppState: ObservableObject {
         loadTodaySummary()
 
         // 启动时重建提醒
-        if let plan = todayPlan {
-            NotificationManager.shared.cancelAllNotifications()
-            NotificationManager.shared.scheduleNotifications(for: plan.planItems)
-        }
+        refreshTodayPlanNotifications()
 
         // 启动定时总结
         setupAutoSummary()
@@ -34,7 +37,7 @@ class AppState: ObservableObject {
     }
 
     func saveTasks() {
-        try? FileStorageManager.shared.saveTasks(tasks)
+        FileStorageManager.shared.saveTasksAsync(tasks)
     }
 
     func addTask(raw: String) {
@@ -55,7 +58,68 @@ class AppState: ObservableObject {
 
     func toggleTaskStatus(_ task: Task) {
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-            tasks[index].status = tasks[index].status == .todo ? .done : .todo
+            if tasks[index].status == .done {
+                tasks[index].status = .todo
+                tasks[index].startedAt = nil
+                tasks[index].pausedAt = nil
+                tasks[index].completedAt = nil
+            } else {
+                completeTask(taskId: task.id, shouldSave: false)
+            }
+            saveTasks()
+        }
+    }
+
+    func startTask(taskId: UUID) {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        print("[AppState] startTask(\(taskId)) triggered")
+        
+        guard let index = tasks.firstIndex(where: { $0.id == taskId }) else { return }
+        let now = Date()
+        if tasks[index].startedAt == nil {
+            tasks[index].startedAt = now
+        }
+        tasks[index].status = .inProgress
+        tasks[index].pausedAt = nil
+        tasks[index].completedAt = nil
+        saveTasks()
+        
+        let duration = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+        print("[AppState] startTask(\(taskId)) main thread execution finished in \(String(format: "%.2f", duration))ms")
+    }
+
+    func pauseTask(taskId: UUID) {
+        guard let index = tasks.firstIndex(where: { $0.id == taskId }) else { return }
+        let now = Date()
+        if tasks[index].startedAt == nil {
+            tasks[index].startedAt = now
+        }
+        tasks[index].status = .paused
+        tasks[index].pausedAt = now
+        tasks[index].completedAt = nil
+        saveTasks()
+    }
+
+    func completeTask(taskId: UUID) {
+        completeTask(taskId: taskId, shouldSave: true)
+    }
+
+    func updateTaskConclusion(taskId: UUID, conclusion: String) {
+        guard let index = tasks.firstIndex(where: { $0.id == taskId }) else { return }
+        let trimmed = conclusion.trimmingCharacters(in: .whitespacesAndNewlines)
+        tasks[index].conclusion = trimmed.isEmpty ? nil : trimmed
+        saveTasks()
+    }
+
+    private func completeTask(taskId: UUID, shouldSave: Bool) {
+        guard let index = tasks.firstIndex(where: { $0.id == taskId }) else { return }
+        let now = Date()
+        if tasks[index].startedAt == nil {
+            tasks[index].startedAt = now
+        }
+        tasks[index].status = .done
+        tasks[index].completedAt = now
+        if shouldSave {
             saveTasks()
         }
     }
@@ -67,10 +131,7 @@ class AppState: ObservableObject {
 
     /// 完成计划项：将对应任务标为已完成
     func completePlanItem(_ item: PlanItem) {
-        if let index = tasks.firstIndex(where: { $0.id == item.taskId }) {
-            tasks[index].status = .done
-            saveTasks()
-        }
+        completeTask(taskId: item.taskId)
     }
 
     /// 从今日计划中移除计划项，并删除对应任务
@@ -96,6 +157,28 @@ class AppState: ObservableObject {
         saveTasks()
     }
 
+    /// 将未安排任务上移一位
+    func moveOverflowTaskUp(_ overflow: OverflowTask) {
+        guard var plan = todayPlan,
+              let index = plan.overflowTasks.firstIndex(where: { $0.taskId == overflow.taskId }),
+              index > 0 else { return }
+
+        plan.overflowTasks.swapAt(index, index - 1)
+        todayPlan = plan
+        saveTodayPlan()
+    }
+
+    /// 将未安排任务下移一位
+    func moveOverflowTaskDown(_ overflow: OverflowTask) {
+        guard var plan = todayPlan,
+              let index = plan.overflowTasks.firstIndex(where: { $0.taskId == overflow.taskId }),
+              index < plan.overflowTasks.count - 1 else { return }
+
+        plan.overflowTasks.swapAt(index, index + 1)
+        todayPlan = plan
+        saveTodayPlan()
+    }
+
     /// 修改计划项时间，保存计划并重建提醒
     func updatePlanItemTime(item: PlanItem, newStart: Date, newEnd: Date) {
         guard newStart < newEnd else { return }
@@ -105,8 +188,7 @@ class AppState: ObservableObject {
         plan.planItems[index].end = newEnd
         todayPlan = plan
         saveTodayPlan()
-        NotificationManager.shared.cancelAllNotifications()
-        NotificationManager.shared.scheduleNotifications(for: plan.planItems)
+        refreshTodayPlanNotifications()
     }
 
     /// 获取某任务的状态（用于计划项展示）
@@ -125,22 +207,82 @@ class AppState: ObservableObject {
         }
     }
 
-    /// 根据当前顺序自动重新排布时间段（保持每个任务的时长不变）
+    /// 根据当前顺序自动重新排布时间段（保持每个任务的时长不变），并避开非工作时间段
     private func recalculatePlanTimes(for plan: inout DayPlan) {
         guard !plan.planItems.isEmpty else { return }
 
-        var items = plan.planItems
+        let ranges = SettingsManager.shared.workingBlocks
+            .compactMap { $0.toDateRange(on: plan.date) }
+            .filter { $0.start < $0.end }
+            .sorted { $0.start < $1.start }
 
-        // 以当前第一个任务的开始时间为基准，后面任务依次顺延
+        var items = plan.planItems
         var currentStart = items[0].start
+
+        if let alignedStart = nextWorkingStart(atOrAfter: currentStart, in: ranges) {
+            currentStart = alignedStart
+        }
+
+        if ranges.isEmpty {
+            for index in 0..<items.count {
+                let duration = max(items[index].end.timeIntervalSince(items[index].start), 60)
+                items[index].start = currentStart
+                items[index].end = currentStart.addingTimeInterval(duration)
+                currentStart = items[index].end
+            }
+            plan.planItems = items
+            return
+        }
+
         for index in 0..<items.count {
-            let duration = items[index].end.timeIntervalSince(items[index].start)
-            items[index].start = currentStart
-            items[index].end = currentStart.addingTimeInterval(duration)
-            currentStart = items[index].end
+            let duration = max(items[index].end.timeIntervalSince(items[index].start), 60)
+            let scheduled = scheduleInWorkingRanges(startingAt: currentStart, duration: duration, ranges: ranges)
+            items[index].start = scheduled.start
+            items[index].end = scheduled.end
+            currentStart = scheduled.end
         }
 
         plan.planItems = items
+    }
+
+    private func nextWorkingStart(atOrAfter date: Date, in ranges: [(start: Date, end: Date)]) -> Date? {
+        for range in ranges {
+            if date < range.start { return range.start }
+            if date >= range.start && date < range.end { return date }
+        }
+        return nil
+    }
+
+    private func scheduleInWorkingRanges(startingAt currentStart: Date, duration: TimeInterval, ranges: [(start: Date, end: Date)]) -> (start: Date, end: Date) {
+        guard !ranges.isEmpty else {
+            return (currentStart, currentStart.addingTimeInterval(duration))
+        }
+
+        if let currentRangeIndex = ranges.firstIndex(where: { $0.end > currentStart }) {
+            let currentRange = ranges[currentRangeIndex]
+            let candidateStart = max(currentStart, currentRange.start)
+            let candidateEnd = candidateStart.addingTimeInterval(duration)
+
+            if candidateEnd <= currentRange.end {
+                return (candidateStart, candidateEnd)
+            }
+
+            if currentRangeIndex + 1 < ranges.count {
+                for nextIndex in (currentRangeIndex + 1)..<ranges.count {
+                    let nextRange = ranges[nextIndex]
+                    let nextStart = nextRange.start
+                    let nextEnd = nextStart.addingTimeInterval(duration)
+                    if nextEnd <= nextRange.end {
+                        return (nextStart, nextEnd)
+                    }
+                }
+            }
+
+            let fallbackStart = max(currentStart, ranges[ranges.count - 1].start)
+            return (fallbackStart, fallbackStart.addingTimeInterval(duration))
+        }
+
+        return (currentStart, currentStart.addingTimeInterval(duration))
     }
 
     /// 将计划项上移一位
@@ -153,8 +295,7 @@ class AppState: ObservableObject {
         recalculatePlanTimes(for: &plan)
         todayPlan = plan
         saveTodayPlan()
-        NotificationManager.shared.cancelAllNotifications()
-        NotificationManager.shared.scheduleNotifications(for: plan.planItems)
+        refreshTodayPlanNotifications()
     }
 
     /// 将计划项下移一位
@@ -167,8 +308,7 @@ class AppState: ObservableObject {
         recalculatePlanTimes(for: &plan)
         todayPlan = plan
         saveTodayPlan()
-        NotificationManager.shared.cancelAllNotifications()
-        NotificationManager.shared.scheduleNotifications(for: plan.planItems)
+        refreshTodayPlanNotifications()
     }
 
     func generatePlan(userInput: String = "") async {
@@ -212,47 +352,61 @@ class AppState: ObservableObject {
                 saveTodayPlan()
 
                 // 合并任务列表：保留已有任务 ID 的完成状态，新项为 todo
-                var taskStatusById: [UUID: Task.TaskStatus] = [:]
-                for t in tasks {
-                    taskStatusById[t.id] = t.status
+                var existingTaskById: [UUID: Task] = [:]
+                for task in tasks {
+                    existingTaskById[task.id] = task
                 }
                 
                 // 收集 AI 返回的所有 ID
                 let returnedIds = Set(response.planItems.map { $0.taskId } + response.overflowTasks.map { $0.taskId })
                 
-                var newTasks = response.planItems.map { item in
-                    Task(
+                var newTasks: [Task] = response.planItems.map { item -> Task in
+                    let existingTask = existingTaskById[item.taskId]
+                    return Task(
                         id: item.taskId,
                         raw: item.title,
                         title: item.title,
-                        status: taskStatusById[item.taskId] ?? .todo
+                        status: existingTask?.status ?? .todo,
+                        startedAt: existingTask?.startedAt,
+                        pausedAt: existingTask?.pausedAt,
+                        completedAt: existingTask?.completedAt,
+                        conclusion: existingTask?.conclusion
                     )
                 }
-                newTasks += response.overflowTasks.map { overflow in
-                    Task(
+                newTasks += response.overflowTasks.map { overflow -> Task in
+                    let existingTask = existingTaskById[overflow.taskId]
+                    return Task(
                         id: overflow.taskId,
                         raw: overflow.title ?? "未安排",
                         title: overflow.title ?? "未安排",
-                        status: taskStatusById[overflow.taskId] ?? .todo
+                        status: existingTask?.status ?? .todo,
+                        startedAt: existingTask?.startedAt,
+                        pausedAt: existingTask?.pausedAt,
+                        completedAt: existingTask?.completedAt,
+                        conclusion: existingTask?.conclusion
                     )
                 }
                 
                 // 检查 carryOverTasks 中是否有遗漏的，如果有，加回 newTasks
                 for (id, title) in carryOverTasks {
                     if !returnedIds.contains(id) {
-                         newTasks.append(Task(
-                            id: id,
-                            raw: title,
-                            title: title,
-                            status: .todo
-                         ))
+                        if let existingTask = existingTaskById[id] {
+                            newTasks.append(existingTask)
+                        } else {
+                            newTasks.append(Task(
+                                id: id,
+                                raw: title,
+                                title: title,
+                                status: .todo
+                            ))
+                        }
                     }
                 }
                 
                 tasks = newTasks
                 saveTasks()
 
-                // 不在生成今日计划时自动创建通知，只更新计划与任务列表
+                refreshTodayPlanNotifications()
                 isGeneratingPlan = false
             }
         } catch {

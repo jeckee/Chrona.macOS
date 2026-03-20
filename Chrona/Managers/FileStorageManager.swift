@@ -5,6 +5,7 @@ class FileStorageManager {
     static let shared = FileStorageManager()
 
     private let fileManager = FileManager.default
+    private let ioQueue = DispatchQueue(label: "chrona.file-storage", qos: .utility)
     private var storageDirectory: URL {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let chronaDir = appSupport.appendingPathComponent("Chrona")
@@ -23,6 +24,23 @@ class FileStorageManager {
         let url = storageDirectory.appendingPathComponent("tasks.json")
         let data = try JSONEncoder().encode(tasks)
         try data.write(to: url)
+    }
+
+    func saveTasksAsync(_ tasks: [Task]) {
+        let queueTime = CFAbsoluteTimeGetCurrent()
+        ioQueue.async { [weak self] in
+            let startTime = CFAbsoluteTimeGetCurrent()
+            let waitTime = (startTime - queueTime) * 1000
+            
+            guard let self else { return }
+            do {
+                try self.saveTasks(tasks)
+                let duration = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+                print("[FileStorageManager] Async save completed. Wait in queue: \(String(format: "%.2f", waitTime))ms, I/O duration: \(String(format: "%.2f", duration))ms, Task count: \(tasks.count)")
+            } catch {
+                print("[FileStorageManager] Async save failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     func loadTasks() -> [Task] {

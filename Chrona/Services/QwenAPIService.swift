@@ -98,6 +98,7 @@ class QwenAPIService {
         5. 每项包含 title、start(HH:mm)、end(HH:mm)、locked(默认 false)、tips(2-3 条)
         6. 所有计划项必须安排在工作时间段内，且时间不得重叠
         7. 无法安排的内容放入 overflow_tasks，填写 task_id、title、reason、suggestion
+        8. 任务只能根据用户输入，不能无中生有
 
         **输出格式**（必须是有效的 JSON）:
         {
@@ -279,10 +280,17 @@ class QwenAPIService {
         let dateString = dateFormatter.string(from: date)
 
         let completedTasks = tasks.filter { $0.status == .done }
-        let uncompletedTasks = tasks.filter { $0.status == .todo }
+        let uncompletedTasks = tasks.filter { $0.status != .done }
 
-        let completedStr = completedTasks.map { "- \($0.title)" }.joined(separator: "\n")
-        let uncompletedStr = uncompletedTasks.map { "- \($0.title)" }.joined(separator: "\n")
+        let formatTaskForSummary: (Task) -> String = { task in
+            let conclusion = task.conclusion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if conclusion.isEmpty {
+                return "- \(task.title)"
+            }
+            return "- \(task.title)（结论：\(conclusion)）"
+        }
+        let completedStr = completedTasks.map(formatTaskForSummary).joined(separator: "\n")
+        let uncompletedStr = uncompletedTasks.map(formatTaskForSummary).joined(separator: "\n")
 
         let prompt = """
         你是一个智能时间管理助手。请为用户生成今日工作总结。

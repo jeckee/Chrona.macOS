@@ -34,10 +34,11 @@ struct MainWindow: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let plan = appState.todayPlan, (!plan.planItems.isEmpty || !plan.overflowTasks.isEmpty) {
+                let taskById = Dictionary(uniqueKeysWithValues: appState.tasks.map { ($0.id, $0) })
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
                         ForEach(Array(plan.planItems.enumerated()), id: \.element.id) { index, item in
-                            PlanItemCard(item: item)
+                            PlanItemCard(item: item, task: taskById[item.taskId])
                                 .transition(.move(edge: .top).combined(with: .opacity))
                                 .animation(.easeOut(duration: 0.3).delay(Double(index) * 0.1), value: plan.planItems.count)
                         }
@@ -66,13 +67,28 @@ struct MainWindow: View {
                                         .foregroundColor(.blue)
                                 }
                                 Spacer()
-                                Button(action: {
-                                    appState.removeOverflowTask(overflow)
-                                }) {
-                                    Image(systemName: "trash")
-                                        .foregroundColor(.red)
+                                HStack(spacing: 8) {
+                                    Button(action: {
+                                        appState.removeOverflowTask(overflow)
+                                    }) {
+                                        Image(systemName: "trash")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    Menu {
+                                        Button("上移", systemImage: "arrow.up") {
+                                            appState.moveOverflowTaskUp(overflow)
+                                        }
+                                        Button("下移", systemImage: "arrow.down") {
+                                            appState.moveOverflowTaskDown(overflow)
+                                        }
+                                    } label: {
+                                        Image(systemName: "ellipsis.circle")
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .menuStyle(.borderlessButton)
                                 }
-                                .buttonStyle(.plain)
                             }
                             .padding(12)
                             .frame(maxWidth: .infinity, alignment: .leading)

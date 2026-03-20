@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct MenuBarView: View {
     @EnvironmentObject var appState: AppState
@@ -69,12 +70,14 @@ struct MenuBarView: View {
                 }
 
                 if let plan = appState.todayPlan, !(plan.planItems.isEmpty && plan.overflowTasks.isEmpty) {
+                    let taskById = Dictionary(uniqueKeysWithValues: appState.tasks.map { ($0.id, $0) })
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 10) {
+                        LazyVStack(alignment: .leading, spacing: 10) {
                             ForEach(plan.planItems) { item in
+                                let status = taskById[item.taskId]?.status
                                 HStack(spacing: 8) {
-                                    Image(systemName: appState.taskStatus(for: item.taskId) == .done ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(appState.taskStatus(for: item.taskId) == .done ? .green : .secondary)
+                                    Image(systemName: status == .done ? "checkmark.circle.fill" : "circle")
+                                        .foregroundColor(status == .done ? .green : .secondary)
                                         .font(.system(size: 14))
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(item.title)
@@ -140,6 +143,8 @@ struct MenuBarView: View {
                 .disabled(appState.isGeneratingSummary || appState.todayPlan == nil)
 
                 Button("打开主窗口") {
+                    let menuWindow = NSApp.keyWindow
+                    menuWindow?.orderOut(nil)
                     if !WindowManager.bringToFront(id: WindowIDs.main) {
                         openWindow(id: WindowIDs.main)
                         DispatchQueue.main.async {
@@ -180,8 +185,12 @@ struct MenuBarView: View {
     }
 
     private func formatTime(_ date: Date) -> String {
+        MenuBarView.timeFormatter.string(from: date)
+    }
+
+    private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
-    }
+        return formatter
+    }()
 }
