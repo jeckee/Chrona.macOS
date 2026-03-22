@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+<<<<<<< HEAD
 		C01A00000000000000000001 /* ChronaMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01A00000000000000000002 /* ChronaMacApp.swift */; };
 /* End PBXBuildFile section */
 
@@ -17,6 +18,44 @@
 
 /* Begin PBXFrameworksBuildPhase section */
 		C01A00000000000000000004 /* Frameworks */ = {
+=======
+		AA0001 /* ChronaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001 /* ChronaApp.swift */; };
+		AA0002 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0002 /* AppState.swift */; };
+		AA0003 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0003 /* Models.swift */; };
+		AA0004 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0004 /* KeychainManager.swift */; };
+		AA0005 /* FileStorageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0005 /* FileStorageManager.swift */; };
+		AA0006 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0006 /* SettingsManager.swift */; };
+		AA0007 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0007 /* NotificationManager.swift */; };
+		AA0008 /* QwenAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0008 /* QwenAPIService.swift */; };
+		AA0009 /* MainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0009 /* MainWindow.swift */; };
+		AA0010 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0010 /* SettingsView.swift */; };
+		AA0011 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0011 /* MenuBarView.swift */; };
+		AA0012 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0012 /* Components.swift */; };
+		AA0013 /* WindowUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0013 /* WindowUtils.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		CC0001 /* Chrona.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Chrona.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB0001 /* ChronaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChronaApp.swift; sourceTree = "<group>"; };
+		BB0002 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		BB0003 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		BB0004 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
+		BB0005 /* FileStorageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileStorageManager.swift; sourceTree = "<group>"; };
+		BB0006 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
+		BB0007 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		BB0008 /* QwenAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QwenAPIService.swift; sourceTree = "<group>"; };
+		BB0009 /* MainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindow.swift; sourceTree = "<group>"; };
+		BB0010 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		BB0011 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
+		BB0012 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		BB0013 /* WindowUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowUtils.swift; sourceTree = "<group>"; };
+		DD0001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		DD0002 /* Chrona.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Chrona.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		EE0001 /* Frameworks */ = {
+>>>>>>> origin/main
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -26,6 +65,7 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+<<<<<<< HEAD
 		C01A00000000000000000005 = {
 			isa = PBXGroup;
 			children = (
@@ -46,10 +86,40 @@
 			isa = PBXGroup;
 			children = (
 				C01A00000000000000000003 /* Chrona.app */,
+=======
+		FF0001 = {
+			isa = PBXGroup;
+			children = (
+				FF0002 /* Chrona */,
+				FF0003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FF0002 /* Chrona */ = {
+			isa = PBXGroup;
+			children = (
+				BB0001 /* ChronaApp.swift */,
+				BB0002 /* AppState.swift */,
+				FF0004 /* Models */,
+				FF0005 /* Managers */,
+				FF0006 /* Services */,
+				FF0007 /* Views */,
+				DD0001 /* Info.plist */,
+				DD0002 /* Chrona.entitlements */,
+			);
+			path = Chrona;
+			sourceTree = "<group>";
+		};
+		FF0003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CC0001 /* Chrona.app */,
+>>>>>>> origin/main
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
+<<<<<<< HEAD
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -60,35 +130,104 @@
 				C01A0000000000000000000A /* Sources */,
 				C01A00000000000000000004 /* Frameworks */,
 				C01A0000000000000000000B /* Resources */,
+=======
+		FF0004 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				BB0003 /* Models.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		FF0005 /* Managers */ = {
+			isa = PBXGroup;
+			children = (
+				BB0004 /* KeychainManager.swift */,
+				BB0005 /* FileStorageManager.swift */,
+				BB0006 /* SettingsManager.swift */,
+				BB0007 /* NotificationManager.swift */,
+			);
+			path = Managers;
+			sourceTree = "<group>";
+		};
+		FF0006 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				BB0008 /* QwenAPIService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		FF0007 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				BB0009 /* MainWindow.swift */,
+				BB0010 /* SettingsView.swift */,
+				BB0011 /* MenuBarView.swift */,
+				BB0012 /* Components.swift */,
+				BB0013 /* WindowUtils.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		GG0001 /* Chrona */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = HH0001 /* Build configuration list for PBXNativeTarget "Chrona" */;
+			buildPhases = (
+				II0001 /* Sources */,
+				EE0001 /* Frameworks */,
+				JJ0001 /* Resources */,
+>>>>>>> origin/main
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
+<<<<<<< HEAD
 			name = ChronaApp;
 			packageProductDependencies = (
 				C01A0000000000000000000C /* Chrona */,
 			);
 			productName = ChronaApp;
 			productReference = C01A00000000000000000003 /* Chrona.app */;
+=======
+			name = Chrona;
+			productName = Chrona;
+			productReference = CC0001 /* Chrona.app */;
+>>>>>>> origin/main
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
+<<<<<<< HEAD
 		C01A0000000000000000000D /* Project object */ = {
+=======
+		KK0001 /* Project object */ = {
+>>>>>>> origin/main
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
+<<<<<<< HEAD
 					C01A00000000000000000008 /* ChronaApp */ = {
+=======
+					GG0001 = {
+>>>>>>> origin/main
 						CreatedOnToolsVersion = 15.0;
 					};
 				};
 			};
+<<<<<<< HEAD
 			buildConfigurationList = C01A0000000000000000000E /* Build configuration list for PBXProject "Chrona" */;
+=======
+			buildConfigurationList = LL0001 /* Build configuration list for PBXProject "Chrona" */;
+>>>>>>> origin/main
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -96,6 +235,7 @@
 				en,
 				Base,
 			);
+<<<<<<< HEAD
 			mainGroup = C01A00000000000000000005;
 			packageReferences = (
 				C01A0000000000000000000F /* XCLocalSwiftPackageReference */,
@@ -105,12 +245,24 @@
 			projectRoot = "";
 			targets = (
 				C01A00000000000000000008 /* ChronaApp */,
+=======
+			mainGroup = FF0001;
+			productRefGroup = FF0003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				GG0001 /* Chrona */,
+>>>>>>> origin/main
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+<<<<<<< HEAD
 		C01A0000000000000000000B /* Resources */ = {
+=======
+		JJ0001 /* Resources */ = {
+>>>>>>> origin/main
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -120,18 +272,42 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+<<<<<<< HEAD
 		C01A0000000000000000000A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				C01A00000000000000000001 /* ChronaMacApp.swift in Sources */,
+=======
+		II0001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0001 /* ChronaApp.swift in Sources */,
+				AA0002 /* AppState.swift in Sources */,
+				AA0003 /* Models.swift in Sources */,
+				AA0004 /* KeychainManager.swift in Sources */,
+				AA0005 /* FileStorageManager.swift in Sources */,
+				AA0006 /* SettingsManager.swift in Sources */,
+				AA0007 /* NotificationManager.swift in Sources */,
+				AA0008 /* QwenAPIService.swift in Sources */,
+				AA0009 /* MainWindow.swift in Sources */,
+				AA0010 /* SettingsView.swift in Sources */,
+				AA0011 /* MenuBarView.swift in Sources */,
+				AA0012 /* Components.swift in Sources */,
+				AA0013 /* WindowUtils.swift in Sources */,
+>>>>>>> origin/main
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+<<<<<<< HEAD
 		C01A00000000000000000010 /* Debug */ = {
+=======
+		MM0001 /* Debug */ = {
+>>>>>>> origin/main
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -184,7 +360,11 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+<<<<<<< HEAD
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+=======
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+>>>>>>> origin/main
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -194,7 +374,11 @@
 			};
 			name = Debug;
 		};
+<<<<<<< HEAD
 		C01A00000000000000000011 /* Release */ = {
+=======
+		MM0002 /* Release */ = {
+>>>>>>> origin/main
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -241,7 +425,11 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+<<<<<<< HEAD
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+=======
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+>>>>>>> origin/main
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
@@ -249,6 +437,7 @@
 			};
 			name = Release;
 		};
+<<<<<<< HEAD
 		C01A00000000000000000012 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -259,20 +448,42 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+=======
+		NN0001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Chrona/Chrona.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Chrona/Info.plist;
+>>>>>>> origin/main
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+<<<<<<< HEAD
 				PRODUCT_BUNDLE_IDENTIFIER = dev.chrona.app;
 				PRODUCT_MODULE_NAME = ChronaApp;
 				PRODUCT_NAME = Chrona;
+=======
+				PRODUCT_BUNDLE_IDENTIFIER = com.chrona.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+>>>>>>> origin/main
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
+<<<<<<< HEAD
 		C01A00000000000000000013 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -283,15 +494,36 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+=======
+		NN0002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Chrona/Chrona.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Chrona/Info.plist;
+>>>>>>> origin/main
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+<<<<<<< HEAD
 				PRODUCT_BUNDLE_IDENTIFIER = dev.chrona.app;
 				PRODUCT_MODULE_NAME = ChronaApp;
 				PRODUCT_NAME = Chrona;
+=======
+				PRODUCT_BUNDLE_IDENTIFIER = com.chrona.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+>>>>>>> origin/main
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -300,25 +532,42 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+<<<<<<< HEAD
 		C01A0000000000000000000E /* Build configuration list for PBXProject "Chrona" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				C01A00000000000000000010 /* Debug */,
 				C01A00000000000000000011 /* Release */,
+=======
+		LL0001 /* Build configuration list for PBXProject "Chrona" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				MM0001 /* Debug */,
+				MM0002 /* Release */,
+>>>>>>> origin/main
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+<<<<<<< HEAD
 		C01A00000000000000000009 /* Build configuration list for PBXNativeTarget "ChronaApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				C01A00000000000000000012 /* Debug */,
 				C01A00000000000000000013 /* Release */,
+=======
+		HH0001 /* Build configuration list for PBXNativeTarget "Chrona" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				NN0001 /* Debug */,
+				NN0002 /* Release */,
+>>>>>>> origin/main
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+<<<<<<< HEAD
 
 /* Begin XCLocalSwiftPackageReference section */
 		C01A0000000000000000000F /* XCLocalSwiftPackageReference */ = {
@@ -336,4 +585,8 @@
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C01A0000000000000000000D /* Project object */;
+=======
+	};
+	rootObject = KK0001 /* Project object */;
+>>>>>>> origin/main
 }
