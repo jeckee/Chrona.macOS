@@ -58,13 +58,13 @@ struct AIModelSection: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(labelGray)
             Menu {
-                ForEach(ChronaAIProvider.allCases) { p in
-                    Button(p.rawValue) {
+                ForEach(AIProvider.allCases) { p in
+                    Button(p.displayName) {
                         store.provider = p
                     }
                 }
             } label: {
-                settingsMenuLabel(title: store.provider.rawValue)
+                settingsMenuLabel(title: store.provider.displayName)
             }
             .menuStyle(.borderlessButton)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -79,7 +79,7 @@ struct AIModelSection: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(labelGray)
             Menu {
-                ForEach(store.provider.models, id: \.self) { m in
+                ForEach(store.modelPickerOptions, id: \.self) { m in
                     Button(m) {
                         store.model = m
                     }
@@ -157,21 +157,24 @@ struct AIModelSection: View {
                     .font(ChronaTokens.Typography.captionMedium)
                     .foregroundStyle(labelGray)
             }
-        case .connected:
+        case .success(let message):
             HStack(spacing: ChronaTokens.Space.sm) {
                 Circle()
                     .fill(ChronaTokens.Colors.success)
                     .frame(width: 8, height: 8)
-                Text("Connected")
+                Text("Success")
                     .font(ChronaTokens.Typography.captionMedium)
                     .foregroundStyle(ChronaTokens.Colors.success)
+                Text(String(message.prefix(40)))
+                    .font(ChronaTokens.Typography.captionMedium)
+                    .foregroundStyle(ChronaTokens.Colors.subtext)
             }
-        case .failed:
+        case .failure(let message):
             HStack(spacing: ChronaTokens.Space.sm) {
                 Image(systemName: "exclamationmark.circle.fill")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(ChronaTokens.Colors.warning)
-                Text("Could not connect")
+                Text(String(message.prefix(80)))
                     .font(ChronaTokens.Typography.captionMedium)
                     .foregroundStyle(ChronaTokens.Colors.warning)
             }

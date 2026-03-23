@@ -57,7 +57,7 @@ struct WorkingHoursSection: View {
         HStack(spacing: ChronaTokens.Space.sm) {
             DatePicker(
                 "",
-                selection: binding(for: range.id, keyPath: \.start),
+                selection: startBinding(for: range.id),
                 displayedComponents: .hourAndMinute
             )
             .labelsHidden()
@@ -69,7 +69,7 @@ struct WorkingHoursSection: View {
 
             DatePicker(
                 "",
-                selection: binding(for: range.id, keyPath: \.end),
+                selection: endBinding(for: range.id),
                 displayedComponents: .hourAndMinute
             )
             .labelsHidden()
@@ -90,17 +90,21 @@ struct WorkingHoursSection: View {
         }
     }
 
-    private func binding(for id: ChronaWorkingTimeRange.ID, keyPath: WritableKeyPath<ChronaWorkingTimeRange, Date>) -> Binding<Date> {
+    private func startBinding(for id: ChronaWorkingTimeRange.ID) -> Binding<Date> {
         Binding(
             get: {
-                store.timeRanges.first(where: { $0.id == id })?[keyPath: keyPath] ?? Date()
+                store.timeRanges.first(where: { $0.id == id })?.start ?? Date()
             },
-            set: { newValue in
-                guard let idx = store.timeRanges.firstIndex(where: { $0.id == id }) else { return }
-                var row = store.timeRanges[idx]
-                row[keyPath: keyPath] = newValue
-                store.timeRanges[idx] = row
-            }
+            set: { store.replaceTimeRange(id: id, start: $0) }
+        )
+    }
+
+    private func endBinding(for id: ChronaWorkingTimeRange.ID) -> Binding<Date> {
+        Binding(
+            get: {
+                store.timeRanges.first(where: { $0.id == id })?.end ?? Date()
+            },
+            set: { store.replaceTimeRange(id: id, end: $0) }
         )
     }
 }

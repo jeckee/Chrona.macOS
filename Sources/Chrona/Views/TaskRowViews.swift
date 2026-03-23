@@ -1,17 +1,42 @@
 import SwiftUI
 
 struct TaskListRow: View {
-    @EnvironmentObject private var store: TaskStore
+    @EnvironmentObject private var chronaStore: ChronaStore
     let task: ChronaTask
+    var scheduleBlock: ScheduleBlock?
+
+    private var bucket: TaskBucket {
+        chronaStore.sidebarBucket(for: task)
+    }
+
+    private var canSchedule: Bool { chronaStore.canScheduleTask }
+    private var canDelete: Bool { chronaStore.canDeleteTask }
+    private var canChangeStatus: Bool { chronaStore.canChangeTaskStatus }
+
+
+    private var scheduledStart: Date? { scheduleBlock?.startAt }
+    private var scheduledEnd: Date? { scheduleBlock?.endAt }
+
+    private var rowDurationMinutes: Int {
+        if let b = scheduleBlock {
+            max(1, b.durationMinutes)
+        } else if let est = task.estimatedMinutes {
+            est
+        } else {
+            30
+        }
+    }
+
+    private var isConflict: Bool { false }
 
     private var isSelected: Bool {
-        store.selection == task.id
+        chronaStore.selection == task.id
     }
 
     private var hasMetaLines: Bool {
-        task.bucket == .scheduled
-            || (task.bucket == .unscheduled && task.estimatedMinutes != nil)
-            || task.isConflict
+        bucket == .scheduled
+            || (bucket == .unscheduled && task.estimatedMinutes != nil)
+            || isConflict
     }
 
     private var showsActionRow: Bool {
@@ -19,24 +44,32 @@ struct TaskListRow: View {
     }
 
     private var cardRadius: CGFloat {
-        task.bucket == .unscheduled ? ChronaTokens.Radius.lg : ChronaTokens.Surface.cornerRadius
+        bucket == .unscheduled ? ChronaTokens.Radius.lg : ChronaTokens.Surface.cornerRadius
     }
 
     private var titleColor: Color {
-        if task.bucket == .scheduled {
-            if task.isConflict { return ChronaTokens.Colors.warning }
+        if bucket == .scheduled {
+            if isConflict { return ChronaTokens.Colors.warning }
             if task.status == .inProgress { return ChronaTokens.Colors.primary }
             if task.status == .paused { return ChronaTokens.Colors.warning }
+        }
+        if bucket == .unscheduled {
+            if task.status == .inProgress { return ChronaTokens.Colors.primary }
+            if task.status == .paused { return ChronaTokens.Colors.warning }
+        }
+        if bucket == .completed {
+            return ChronaTokens.Colors.subtext
         }
         return ChronaTokens.Colors.text
     }
 
     private var rowBackground: Color {
-        if task.bucket == .unscheduled {
+        if bucket == .unscheduled {
+            if task.status == .inProgress { return ChronaTokens.Colors.primaryCardTint }
             if task.status == .paused { return ChronaTokens.Colors.warningSoft }
             return ChronaTokens.Colors.bg
         }
-        if task.isConflict { return ChronaTokens.Colors.warningSoft }
+        if isConflict { return ChronaTokens.Colors.warningSoft }
         if task.status == .inProgress { return ChronaTokens.Colors.primaryCardTint }
         if task.status == .paused { return ChronaTokens.Colors.warningSoft }
         return ChronaTokens.Colors.bg
@@ -44,7 +77,7 @@ struct TaskListRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            if task.bucket == .scheduled {
+            if bucket == .scheduled {
                 Rectangle()
                     .fill(leftAccent)
                     .frame(width: 4)
@@ -75,7 +108,7 @@ struct TaskListRow: View {
                     }
                 }
             }
-            .padding(.leading, task.bucket == .scheduled ? 12 : 4)
+            .padding(.leading, bucket == .scheduled ? 12 : 4)
             .padding(.trailing, ChronaTokens.Space.lg)
             .padding(.vertical, ChronaTokens.Space.lg)
         }
@@ -83,20 +116,24 @@ struct TaskListRow: View {
             RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
                 .fill(rowBackground)
         }
+        // 描边仅作装饰；参与命中会盖住行内按钮，导致 List 中「开始」等无法点击（尤其 Unscheduled 虚线框）。
         .overlay {
-            if task.bucket == .unscheduled {
-                RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
-                    .strokeBorder(
-                        ChronaTokens.Colors.border,
-                        style: StrokeStyle(lineWidth: ChronaTokens.Surface.strokeWidth, dash: [6, 4])
-                    )
-            } else {
-                RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
-                    .strokeBorder(
-                        isSelected ? ChronaTokens.Colors.selectionStroke : ChronaTokens.Colors.border.opacity(0.35),
-                        lineWidth: ChronaTokens.Surface.strokeWidth
-                    )
+            Group {
+                if bucket == .unscheduled {
+                    RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
+                        .strokeBorder(
+                            ChronaTokens.Colors.border,
+                            style: StrokeStyle(lineWidth: ChronaTokens.Surface.strokeWidth, dash: [6, 4])
+                        )
+                } else {
+                    RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
+                        .strokeBorder(
+                            isSelected ? ChronaTokens.Colors.selectionStroke : ChronaTokens.Colors.border.opacity(0.35),
+                            lineWidth: ChronaTokens.Surface.strokeWidth
+                        )
+                }
             }
+            .allowsHitTesting(false)
         }
         .clipShape(RoundedRectangle(cornerRadius: cardRadius, style: .continuous))
         .shadow(
@@ -108,7 +145,7 @@ struct TaskListRow: View {
     }
 
     private var metaTint: Color {
-        if task.isConflict { return ChronaTokens.Colors.warning }
+        if isConflict { return ChronaTokens.Colors.warning }
         if task.status == .inProgress { return ChronaTokens.Colors.primary }
         if task.status == .paused { return ChronaTokens.Colors.warning }
         return ChronaTokens.Colors.subtext
@@ -116,17 +153,17 @@ struct TaskListRow: View {
 
     @ViewBuilder
     private var metaLines: some View {
-        if task.bucket == .scheduled {
+        if bucket == .scheduled {
             HStack(spacing: ChronaTokens.Space.lg) {
                 HStack(spacing: 6) {
                     Image(systemName: "clock")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(metaTint.opacity(0.85))
-                    Text(ChronaFormatters.timeRange(start: task.scheduledStart, end: task.scheduledEnd))
+                    Text(ChronaFormatters.timeRange(start: scheduledStart, end: scheduledEnd))
                         .font(.system(size: ChronaTokens.Typography.Size.caption, weight: .medium))
                         .foregroundStyle(metaTint.opacity(0.85))
                 }
-                if task.isConflict {
+                if isConflict {
                     HStack(spacing: 6) {
                         Image(systemName: "hourglass")
                             .font(.system(size: 12, weight: .medium))
@@ -140,13 +177,13 @@ struct TaskListRow: View {
                         Image(systemName: "hourglass")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(metaTint.opacity(0.85))
-                        Text(ChronaFormatters.durationString(minutes: task.durationMinutes))
+                        Text(ChronaFormatters.durationString(minutes: rowDurationMinutes))
                             .font(.system(size: ChronaTokens.Typography.Size.caption, weight: .regular))
                             .foregroundStyle(metaTint.opacity(0.85))
                     }
                 }
             }
-        } else if task.bucket == .unscheduled, let est = task.estimatedMinutes {
+        } else if bucket == .unscheduled, let est = task.estimatedMinutes {
             HStack(spacing: 6) {
                 Image(systemName: "hourglass")
                     .font(.system(size: 14, weight: .regular))
@@ -159,7 +196,7 @@ struct TaskListRow: View {
     }
 
     private var leftAccent: Color {
-        if task.isConflict { return ChronaTokens.Colors.warning }
+        if isConflict { return ChronaTokens.Colors.warning }
         if task.status == .inProgress { return ChronaTokens.Colors.primary }
         if task.status == .paused { return ChronaTokens.Colors.warning }
         return ChronaTokens.Colors.border
@@ -169,111 +206,40 @@ struct TaskListRow: View {
     private var statusTag: some View {
         switch task.status {
         case .inProgress:
-            ChronaChip(text: TaskStatus.inProgress.rawValue, style: .primaryFilled)
+            ChronaChip(text: ChronaTaskStatus.inProgress.displayName, style: .primaryFilled)
         case .paused:
-            ChronaChip(text: TaskStatus.paused.rawValue, style: .warningFilled)
-        case .notStarted:
-            if task.isConflict {
+            ChronaChip(text: ChronaTaskStatus.paused.displayName, style: .warningFilled)
+        case .todo:
+            if isConflict {
                 ChronaChip(
                     text: "Conflict",
                     systemImage: "exclamationmark.triangle.fill",
                     style: .warningFilled
                 )
             } else {
-                ChronaChip(text: TaskStatus.notStarted.rawValue, style: .neutralPill)
+                ChronaChip(text: ChronaTaskStatus.todo.displayName, style: .neutralPill)
             }
-        case .completed:
-            ChronaChip(text: TaskStatus.completed.rawValue, style: .neutralPill)
+        case .done:
+            ChronaChip(
+                text: ChronaTaskStatus.done.displayName,
+                systemImage: "checkmark.seal.fill",
+                style: .primaryFilled
+            )
         }
     }
 
     @ViewBuilder
     private var actionRow: some View {
         HStack(spacing: ChronaTokens.Space.sm) {
-            if task.bucket == .completed {
-                deleteButton
-            } else if task.bucket == .unscheduled {
-                Button {
-                    store.autoSchedule(taskID: task.id)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 12, weight: .medium))
-                        Text("Auto Schedule")
-                    }
-                }
-                .buttonStyle(.chronaAutoSchedulePill)
-
-                deleteButton
-            } else if task.isConflict {
-                Button {
-                    store.resume(taskID: task.id)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Resume")
-                    }
-                }
-                .buttonStyle(.chronaOutlineRow(accent: .warning))
-
-                Button {
-                    store.autoFixConflict(taskID: task.id)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "wand.and.stars")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Auto-Fix")
-                    }
-                }
-                .buttonStyle(.chronaFilledRow(.warning))
-
-                scheduleButton
-                deleteButton
-            } else {
-                switch task.status {
-                case .notStarted:
+            if bucket == .completed {
+                if canChangeStatus { reopenAsTodoButton }
+                if canDelete { deleteButton }
+            } else if bucket == .unscheduled {
+                if canSchedule { scheduleButton }
+                if canDelete { deleteButton }
+            } else if isConflict {
+                if canChangeStatus {
                     Button {
-                        store.start(taskID: task.id)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 11, weight: .semibold))
-                            Text("Start")
-                        }
-                    }
-                    .buttonStyle(.chronaFilledRow(.primary))
-
-                    scheduleButton
-                    deleteButton
-                case .inProgress:
-                    Button {
-                        store.pause(taskID: task.id)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "pause.fill")
-                                .font(.system(size: 11, weight: .semibold))
-                            Text("Pause")
-                        }
-                    }
-                    .buttonStyle(.chronaOutlineRow(accent: .primary))
-
-                    Button {
-                        store.complete(taskID: task.id)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 11, weight: .semibold))
-                            Text("Complete")
-                        }
-                    }
-                    .buttonStyle(.chronaFilledRow(.primary))
-
-                    scheduleButton
-                    deleteButton
-                case .paused:
-                    Button {
-                        store.resume(taskID: task.id)
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "play.fill")
@@ -284,40 +250,126 @@ struct TaskListRow: View {
                     .buttonStyle(.chronaOutlineRow(accent: .warning))
 
                     Button {
-                        store.complete(taskID: task.id)
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "checkmark")
+                            Image(systemName: "wand.and.stars")
                                 .font(.system(size: 11, weight: .semibold))
-                            Text("Complete")
+                            Text("Auto-Fix")
                         }
                     }
                     .buttonStyle(.chronaFilledRow(.warning))
-
-                    scheduleButton
-                    deleteButton
-                case .completed:
-                    deleteButton
                 }
+
+                if canSchedule { scheduleButton }
+                if canDelete { deleteButton }
+            } else {
+                if canChangeStatus { primaryStatusActions }
+                if canSchedule { scheduleButton }
+                if canDelete { deleteButton }
             }
         }
     }
 
+    @ViewBuilder
+    private var primaryStatusActions: some View {
+        switch task.status {
+        case .todo:
+            Button {
+                chronaStore.startTask(id: task.id)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("Start")
+                }
+            }
+            .buttonStyle(.chronaFilledRow(.primary))
+        case .inProgress:
+            Button {
+                chronaStore.pauseTask(id: task.id)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "pause.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("Pause")
+                }
+            }
+            .buttonStyle(.chronaOutlineRow(accent: .primary))
+
+            Button {
+                chronaStore.completeTask(id: task.id)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("Complete")
+                }
+            }
+            .buttonStyle(.chronaFilledRow(.primary))
+        case .paused:
+            Button {
+                chronaStore.startTask(id: task.id)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("Resume")
+                }
+            }
+            .buttonStyle(.chronaOutlineRow(accent: .warning))
+
+            Button {
+                chronaStore.completeTask(id: task.id)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("Complete")
+                }
+            }
+            .buttonStyle(.chronaFilledRow(.warning))
+        case .done:
+            EmptyView()
+        }
+    }
+
+    private var reopenAsTodoButton: some View {
+        Button {
+            chronaStore.resetTaskToTodo(id: task.id)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Back to To-Do")
+            }
+        }
+        .buttonStyle(.chronaOutlineRow(accent: .primary))
+    }
+
     private var scheduleButton: some View {
         Button {
-            // 设计稿占位：日历/排期入口（图标语义对齐 Figma「带时钟的日历」）
+            guard canSchedule else { return }
+            switch bucket {
+            case .unscheduled:
+                chronaStore.scheduleTaskWithDefaultSlot(id: task.id)
+            case .scheduled:
+                chronaStore.unscheduleTask(id: task.id)
+            case .completed:
+                break
+            }
         } label: {
             Image(systemName: "calendar.badge.clock")
                 .font(.system(size: 12, weight: .medium))
         }
         .buttonStyle(.chronaIconBorder)
-        .accessibilityLabel("Schedule")
-        .help("Schedule")
+        .accessibilityLabel(bucket == .unscheduled ? "Add to schedule" : "Remove from schedule")
+        .help(bucket == .unscheduled ? "Add to schedule" : "Remove from schedule")
     }
 
     private var deleteButton: some View {
         Button {
-            store.cancel(taskID: task.id)
+            guard canDelete else { return }
+            chronaStore.deleteTask(id: task.id)
         } label: {
             Image(systemName: "trash")
                 .font(.system(size: 12, weight: .medium))

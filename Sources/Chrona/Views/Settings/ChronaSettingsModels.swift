@@ -24,30 +24,22 @@ enum ChronaSettingsPane: String, CaseIterable, Identifiable {
     }
 }
 
-enum ChronaAIProvider: String, CaseIterable, Identifiable {
-    case uxPilot = "UX Pilot AI"
-    case openAI = "OpenAI"
-    case anthropic = "Anthropic"
+enum AIConnectionState: Equatable {
+    case idle
+    case testing
+    case success(message: String)
+    case failure(message: String)
+}
 
-    var id: String { rawValue }
-
-    var models: [String] {
-        switch self {
-        case .uxPilot: return ["gpt-4o", "gpt-4o-mini"]
-        case .openAI: return ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
-        case .anthropic: return ["claude-3-5-sonnet", "claude-3-opus"]
-        }
+extension AIConnectionState {
+    var isTesting: Bool {
+        if case .testing = self { return true }
+        return false
     }
 }
 
-enum ChronaAPIConnectionState: Equatable {
-    case idle
-    case testing
-    case connected
-    case failed
-}
-
 enum ChronaTaskReminderLead: String, CaseIterable, Identifiable {
+    case zero = "Before 0 min"
     case five = "Before 5 min"
     case ten = "Before 10 min"
     case fifteen = "Before 15 min"

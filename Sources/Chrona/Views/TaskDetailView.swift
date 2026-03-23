@@ -1,9 +1,57 @@
 import SwiftUI
 
 struct TaskDetailView: View {
-    @EnvironmentObject private var store: TaskStore
+    @EnvironmentObject private var chronaStore: ChronaStore
     @Binding var task: ChronaTask
     @StateObject private var noteController = NoteEditingController()
+    @State private var conclusionDraft: String = ""
+
+    private var detailScheduleBlock: ScheduleBlock? {
+        chronaStore.scheduleBlock(forTaskId: task.id)
+    }
+
+    private var canEditConclusion: Bool {
+        chronaStore.canEditConclusion
+    }
+
+    private var detailDurationMinutes: Int {
+        if let b = detailScheduleBlock {
+            max(1, b.durationMinutes)
+        } else if let est = task.estimatedMinutes {
+            est
+        } else {
+            30
+        }
+    }
+
+    private var statusHeadline: String {
+        task.status.displayName.uppercased()
+    }
+
+    private var priorityLine: String {
+        task.priority.rawValue.capitalized
+    }
+
+    private var conclusionBinding: Binding<String> {
+        Binding(
+            get: { conclusionDraft },
+            set: { conclusionDraft = $0 }
+        )
+    }
+
+    private func syncConclusionDraftFromTask() {
+        conclusionDraft = task.conclusion ?? ""
+    }
+
+    private func commitConclusionIfNeeded() {
+        guard canEditConclusion else { return }
+        let trimmed = conclusionDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newValue = trimmed.isEmpty ? nil : trimmed
+        guard newValue != task.conclusion else { return }
+
+        conclusionDraft = newValue ?? ""
+        chronaStore.updateConclusion(id: task.id, conclusion: newValue)
+    }
 
     var body: some View {
         ScrollView {
@@ -33,21 +81,44 @@ struct TaskDetailView: View {
             .padding(.vertical, ChronaTokens.Page.detailVerticalPadding)
         }
         .background(ChronaTokens.Colors.canvas)
+        .onAppear(perform: syncConclusionDraftFromTask)
+        .onChange(of: task.id, perform: { _ in
+            syncConclusionDraftFromTask()
+        })
+        .onDisappear(perform: commitConclusionIfNeeded)
     }
 
     private var statusCapsule: some View {
         HStack(spacing: ChronaTokens.Space.sm) {
             Circle()
-                .fill(ChronaTokens.Colors.primary)
+                .fill(statusCapsuleAccent)
                 .frame(width: 8, height: 8)
-            Text(task.status.rawValue.uppercased())
+            Text(statusHeadline)
                 .font(.system(size: ChronaTokens.Typography.Size.caption, weight: .semibold))
-                .foregroundStyle(ChronaTokens.Colors.primary)
+                .foregroundStyle(statusCapsuleAccent)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
-        .background(ChronaTokens.Colors.primaryCardTint)
+        .background(statusCapsuleBackground)
         .clipShape(Capsule(style: .continuous))
+    }
+
+    private var statusCapsuleAccent: Color {
+        switch task.status {
+        case .todo: return ChronaTokens.Colors.subtext
+        case .inProgress: return ChronaTokens.Colors.primary
+        case .paused: return ChronaTokens.Colors.warning
+        case .done: return ChronaTokens.Colors.success
+        }
+    }
+
+    private var statusCapsuleBackground: Color {
+        switch task.status {
+        case .todo: return ChronaTokens.Colors.bgSoft
+        case .inProgress: return ChronaTokens.Colors.primaryCardTint
+        case .paused: return ChronaTokens.Colors.warningSoft
+        case .done: return ChronaTokens.Colors.success.opacity(0.18)
+        }
     }
 
     private var metaDividerRow: some View {
@@ -55,8 +126,11 @@ struct TaskDetailView: View {
             HStack(alignment: .center, spacing: ChronaTokens.Space.lg) {
                 metaPillBlock(
                     systemImage: "clock",
-                    line1: ChronaFormatters.timeRange(start: task.scheduledStart, end: task.scheduledEnd),
-                    line2: "\(ChronaFormatters.durationString(minutes: task.durationMinutes)) duration"
+                    line1: ChronaFormatters.timeRange(
+                        start: detailScheduleBlock?.startAt,
+                        end: detailScheduleBlock?.endAt
+                    ),
+                    line2: "\(ChronaFormatters.durationString(minutes: detailDurationMinutes)) duration"
                 )
 
                 Rectangle()
@@ -65,8 +139,8 @@ struct TaskDetailView: View {
 
                 metaPillBlock(
                     systemImage: "square.stack.3d.up.fill",
-                    line1: task.priority.rawValue,
-                    line2: task.projectName
+                    line1: priorityLine,
+                    line2: "—"
                 )
             }
             .padding(.bottom, 25)
@@ -133,15 +207,18 @@ struct TaskDetailView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 11.5) {
-                    ForEach(task.suggestedActions) { action in
-                        let resolved = store.tasks.first(where: { $0.id == task.id })?
-                            .suggestedActions.first(where: { $0.id == action.id })
-                        let text = resolved?.text ?? action.text
-
-                        Text("• \(text)")
+                    if task.clues.isEmpty {
+                        Text("• No AI suggestions yet.")
                             .font(.system(size: 15, weight: .regular))
                             .foregroundStyle(ChronaTokens.Colors.text)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        ForEach(task.clues) { clue in
+                            Text("• \(clue.content)")
+                                .font(.system(size: 15, weight: .regular))
+                                .foregroundStyle(ChronaTokens.Colors.text)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
             }
@@ -165,7 +242,7 @@ struct TaskDetailView: View {
                     }
                     .shadow(color: ChronaTokens.Elevation.cardShadowColor, radius: 1, x: 0, y: 1)
 
-                if task.notes.isEmpty {
+                if conclusionDraft.isEmpty {
                     Text("Capture conclusions, thoughts, or blockers…")
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(Color(red: 156 / 255, green: 163 / 255, blue: 175 / 255))
@@ -174,9 +251,14 @@ struct TaskDetailView: View {
                         .allowsHitTesting(false)
                 }
 
-                AppKitTextEditor(text: $task.notes, controller: noteController)
+                AppKitTextEditor(
+                    text: conclusionBinding,
+                    controller: noteController,
+                    onCommit: commitConclusionIfNeeded
+                )
                     .frame(minHeight: 128)
                     .padding(5)
+                    .allowsHitTesting(canEditConclusion)
             }
         }
     }

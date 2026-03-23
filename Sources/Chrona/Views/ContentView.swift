@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject private var store: TaskStore
+    @EnvironmentObject private var chronaStore: ChronaStore
 
     var body: some View {
         // 分割条左右行程：`sidebarMinWidth`…`sidebarMaxWidth` 与 `detailMinWidth` 共同约束（见 ChronaTokens.Layout）。
@@ -28,8 +28,8 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detailPane: some View {
-        if let id = store.selection, store.tasks.contains(where: { $0.id == id }) {
-            TaskDetailView(task: store.binding(for: id))
+        if let id = chronaStore.selection, chronaStore.tasks.contains(where: { $0.id == id }) {
+            TaskDetailView(task: chronaStore.binding(for: id))
                 .id(id)
         } else {
             VStack(spacing: ChronaTokens.Space.xs) {

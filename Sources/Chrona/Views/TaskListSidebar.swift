@@ -1,14 +1,32 @@
 import SwiftUI
 
 struct TaskListSidebar: View {
-    @EnvironmentObject private var store: TaskStore
+    @EnvironmentObject private var chronaStore: ChronaStore
     @State private var quickAddText: String = ""
-    @State private var completedExpanded: Bool = false
     @State private var summaryPresented: Bool = false
-    @State private var dayOffset: Int = 0
 
-    private var displayDate: Date {
-        Calendar.current.date(byAdding: .day, value: dayOffset, to: Date()) ?? Date()
+    private static let monthDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = .current
+        f.dateFormat = "MMM d"
+        return f
+    }()
+
+    private var displayDate: Date { chronaStore.selectedDate }
+
+    private var headerPrimaryDateText: String {
+        let cal = Calendar.current
+        let now = Date()
+
+        if cal.isDate(displayDate, inSameDayAs: now) { return "Today" }
+
+        let yesterday = cal.date(byAdding: .day, value: -1, to: now) ?? now
+        if cal.isDate(displayDate, inSameDayAs: yesterday) { return "Yesterday" }
+
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: now) ?? now
+        if cal.isDate(displayDate, inSameDayAs: tomorrow) { return "Tomorrow" }
+
+        return Self.monthDayFormatter.string(from: displayDate)
     }
 
     var body: some View {
@@ -23,27 +41,24 @@ struct TaskListSidebar: View {
                         .background(ChronaTokens.Colors.border)
                 }
 
-            List(selection: $store.selection) {
+            List(selection: listSelectionBinding) {
                     Section {
-                    ForEach(store.tasks(in: .scheduled)) { task in
-                        TaskListRow(task: task)
+                    ForEach(chronaStore.tasks(in: .scheduled)) { task in
+                        TaskListRow(
+                            task: task,
+                            scheduleBlock: chronaStore.scheduleBlock(forTaskId: task.id)
+                        )
                             .tag(Optional(task.id))
                             .listRowInsets(rowInsets)
                             .listRowSeparator(.hidden)
                             .listRowBackground(ChronaTokens.Colors.bg)
-                            .chronaReorderable(in: .scheduled, task: task)
                     }
                     Color.clear
                         .frame(height: ChronaTokens.List.sectionBottomSpacerHeight)
                         .listRowInsets(ChronaTokens.List.zeroInsets)
                         .listRowSeparator(.hidden)
-                        .dropDestination(for: String.self) { items, _ in
-                            guard let s = items.first, let id = UUID(uuidString: s) else { return false }
-                            store.reorderWithinBucket(.scheduled, draggingId: id, before: nil)
-                            return true
-                        } isTargeted: { _ in }
                     } header: {
-                        ChronaSectionHeader(title: "Scheduled", count: store.tasks(in: .scheduled).count)
+                        ChronaSectionHeader(title: "Scheduled", count: chronaStore.tasks(in: .scheduled).count)
                         .textCase(nil)
                         .padding(.leading, ChronaTokens.List.sidebarScheduledSectionHeaderLeadingInset)
                         .padding(.top, ChronaTokens.Space.sm)
@@ -51,25 +66,22 @@ struct TaskListSidebar: View {
                     }
 
                     Section {
-                        ForEach(store.tasks(in: .unscheduled)) { task in
-                        TaskListRow(task: task)
+                        ForEach(chronaStore.tasks(in: .unscheduled)) { task in
+                        TaskListRow(
+                            task: task,
+                            scheduleBlock: chronaStore.scheduleBlock(forTaskId: task.id)
+                        )
                             .tag(Optional(task.id))
                             .listRowInsets(rowInsets)
                             .listRowSeparator(.hidden)
                             .listRowBackground(ChronaTokens.Colors.bg)
-                            .chronaReorderable(in: .unscheduled, task: task)
                         }
                         Color.clear
                             .frame(height: ChronaTokens.List.sectionBottomSpacerHeight)
                             .listRowInsets(ChronaTokens.List.zeroInsets)
                             .listRowSeparator(.hidden)
-                            .dropDestination(for: String.self) { items, _ in
-                                guard let s = items.first, let id = UUID(uuidString: s) else { return false }
-                                store.reorderWithinBucket(.unscheduled, draggingId: id, before: nil)
-                                return true
-                            } isTargeted: { _ in }
                     } header: {
-                        ChronaSectionHeader(title: "Unscheduled", count: store.tasks(in: .unscheduled).count)
+                        ChronaSectionHeader(title: "Unscheduled", count: chronaStore.tasks(in: .unscheduled).count)
                             .textCase(nil)
                             .listSectionSeparator(.hidden, edges: .top)
                             .padding(.top, ChronaTokens.Space.md)
@@ -77,33 +89,26 @@ struct TaskListSidebar: View {
                     }
 
                     Section {
-                        DisclosureGroup(isExpanded: $completedExpanded) {
-                            ForEach(store.tasks(in: .completed)) { task in
-                            TaskListRow(task: task)
-                                .tag(Optional(task.id))
-                                .listRowInsets(rowInsets)
-                                .listRowSeparator(.hidden)
-                                .listRowBackground(ChronaTokens.Colors.bg)
-                                .chronaReorderable(in: .completed, task: task)
-                            }
-                            Color.clear
-                                .frame(height: ChronaTokens.List.sectionBottomSpacerHeight)
-                                .listRowInsets(ChronaTokens.List.zeroInsets)
-                                .listRowSeparator(.hidden)
-                                .dropDestination(for: String.self) { items, _ in
-                                    guard let s = items.first, let id = UUID(uuidString: s) else { return false }
-                                    store.reorderWithinBucket(.completed, draggingId: id, before: nil)
-                                    return true
-                                } isTargeted: { _ in }
-                        } label: {
-                            ChronaSectionHeader(
-                                title: "Completed",
-                                count: store.tasks(in: .completed).count,
-                                countTint: ChronaTokens.Colors.success
-                            )
-                            .textCase(nil)
+                        ForEach(chronaStore.tasks(in: .completed)) { task in
+                        TaskListRow(
+                            task: task,
+                            scheduleBlock: chronaStore.scheduleBlock(forTaskId: task.id)
+                        )
+                            .tag(Optional(task.id))
+                            .listRowInsets(rowInsets)
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(ChronaTokens.Colors.bg)
                         }
-                        .tint(ChronaTokens.Colors.primary)
+                        Color.clear
+                            .frame(height: ChronaTokens.List.sectionBottomSpacerHeight)
+                            .listRowInsets(ChronaTokens.List.zeroInsets)
+                            .listRowSeparator(.hidden)
+                    } header: {
+                        ChronaSectionHeader(
+                            title: "Completed",
+                            count: chronaStore.tasks(in: .completed).count,
+                            countTint: ChronaTokens.Colors.success
+                        )
                         .textCase(nil)
                     }
                 }
@@ -114,11 +119,13 @@ struct TaskListSidebar: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // 底部输入条用 safeAreaInset 参与布局；勿仅用 ZStack 叠在 List 上，否则列表仍占满整列，contentMargins(.bottom) 往往无法把最后一屏让出来。
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                FloatingTaskInputView(text: $quickAddText, onSubmit: submitQuickAdd)
-                    .padding(.horizontal, ChronaTokens.Space.lg)
-                    .padding(.bottom, 16)
-                    .frame(maxWidth: .infinity)
-                    .background(ChronaTokens.Colors.bg)
+                if chronaStore.canAddTask {
+                    FloatingTaskInputView(text: $quickAddText, onSubmit: submitQuickAdd)
+                        .padding(.horizontal, ChronaTokens.Space.lg)
+                        .padding(.bottom, 16)
+                        .frame(maxWidth: .infinity)
+                        .background(ChronaTokens.Colors.bg)
+                }
             }
         }
         .background(ChronaTokens.Colors.bg)
@@ -151,81 +158,134 @@ struct TaskListSidebar: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: ChronaTokens.Space.md) {
-            Button {
-                dayOffset -= 1
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(ChronaTokens.Colors.text)
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            // 居中：避免 minWidth 内 leading 导致「Today」贴左、相对右箭头更近
-            VStack(alignment: .center, spacing: 4) {
-                Text("Today")
-                    .font(ChronaTokens.Typography.title)
-                    .foregroundStyle(ChronaTokens.Colors.text)
-                    .tracking(-0.6)
-                Text(ChronaFormatters.weekdayMonthDay.string(from: displayDate))
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(ChronaTokens.Colors.subtext)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(minWidth: ChronaTokens.Layout.sidebarHeaderDateBlockMinWidth)
-
-            Button {
-                dayOffset += 1
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(ChronaTokens.Colors.text)
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            Spacer(minLength: ChronaTokens.Space.xs)
-
-            Button {
-                store.repackScheduledTimes()
-            } label: {
-                HStack(spacing: ChronaTokens.Space.sm) {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 14, weight: .medium))
-                    Text("Schedule")
-                        .font(.system(size: 14, weight: .medium))
-                        .lineLimit(1)
+        VStack(alignment: .trailing, spacing: 6) {
+            HStack(alignment: .center, spacing: ChronaTokens.Space.md) {
+                Button {
+                    chronaStore.shiftSelectedDate(byDays: -1)
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(ChronaTokens.Colors.text)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
                 }
-                .fixedSize(horizontal: true, vertical: false)
-            }
-            .buttonStyle(.chronaHeaderPairedSecondary)
-            .disabled(store.tasks(in: .scheduled).isEmpty)
-            .help("Repack scheduled tasks along today's timeline")
+                .buttonStyle(.plain)
 
-            Button {
-                summaryPresented.toggle()
-            } label: {
-                HStack(spacing: ChronaTokens.Space.sm) {
-                    Image(systemName: "sparkles")
+                // 居中：避免 minWidth 内 leading 导致「Today」贴左、相对右箭头更近
+                VStack(alignment: .center, spacing: 4) {
+                    Text(headerPrimaryDateText)
+                        .font(ChronaTokens.Typography.title)
+                        .foregroundStyle(ChronaTokens.Colors.text)
+                        .tracking(-0.6)
+                    Text(ChronaFormatters.weekdayMonthDay.string(from: displayDate))
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(ChronaTokens.Colors.primary)
-                    Text("Summary")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(ChronaTokens.Colors.primary)
-                        .lineLimit(1)
+                        .foregroundStyle(ChronaTokens.Colors.subtext)
+                        .multilineTextAlignment(.center)
                 }
-                .fixedSize(horizontal: true, vertical: false)
+                .frame(minWidth: ChronaTokens.Layout.sidebarHeaderDateBlockMinWidth)
+
+                Button {
+                    chronaStore.shiftSelectedDate(byDays: 1)
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(ChronaTokens.Colors.text)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: ChronaTokens.Space.xs)
+
+                Button {
+                    Task {
+                        await chronaStore.scheduleCurrentDay()
+                    }
+                } label: {
+                    HStack(spacing: ChronaTokens.Space.sm) {
+                        if chronaStore.isScheduling {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 14, weight: .medium))
+                                .rotationEffect(.degrees(chronaStore.isScheduling ? 360 : 0))
+                                .animation(
+                                    .linear(duration: 0.9).repeatForever(autoreverses: false),
+                                    value: chronaStore.isScheduling
+                                )
+                        } else {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        Text("Schedule")
+                            .font(.system(size: 14, weight: .medium))
+                            .lineLimit(1)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+                .buttonStyle(.chronaHeaderPairedSecondary)
+                .disabled(chronaStore.isScheduling)
+                .help("Use one AI call to complete and schedule today's tasks")
+
+                Button {
+                    summaryPresented.toggle()
+                } label: {
+                    HStack(spacing: ChronaTokens.Space.sm) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(ChronaTokens.Colors.primary)
+                        Text("Summary")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(ChronaTokens.Colors.primary)
+                            .lineLimit(1)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+                .buttonStyle(.chronaSummaryHeader)
             }
-            .buttonStyle(.chronaSummaryHeader)
+
+            if let text = scheduleFeedbackText {
+                Text(text)
+                    .font(ChronaTokens.Typography.caption)
+                    .foregroundStyle(scheduleFeedbackColor)
+                    .lineLimit(1)
+            }
         }
     }
 
+    private var scheduleFeedbackText: String? {
+        switch chronaStore.scheduleExecutionState {
+        case .idle:
+            return nil
+        case .scheduling:
+            return "Scheduling..."
+        case .success:
+            return "Schedule updated."
+        case .failure(let message):
+            return message
+        }
+    }
+
+    private var scheduleFeedbackColor: Color {
+        switch chronaStore.scheduleExecutionState {
+        case .failure:
+            return ChronaTokens.Colors.warning
+        case .success:
+            return ChronaTokens.Colors.success
+        case .idle, .scheduling:
+            return ChronaTokens.Colors.subtext
+        }
+    }
+
+    private var listSelectionBinding: Binding<UUID?> {
+        Binding(
+            get: { chronaStore.selection },
+            set: { chronaStore.selection = $0 }
+        )
+    }
+
     private func submitQuickAdd() {
-        let raw = quickAddText
+        let trimmed = quickAddText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
         quickAddText = ""
-        store.addTaskFromQuickInput(raw)
+        chronaStore.addTask(title: trimmed, note: nil)
     }
 }

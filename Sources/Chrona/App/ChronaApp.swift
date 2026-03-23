@@ -5,18 +5,23 @@ enum ChronaWindowID {
     static let settings = "chrona.settings"
 }
 
-/// 主窗口 + 设置窗口共享的 `Scene`（`TaskStore` / `ChronaSettingsStore` 在场景层单例化）。
+/// 主窗口 + 设置窗口共享的 `Scene`（`ChronaStore` / `ChronaSettingsStore` 在场景层单例化）。
 public struct ChronaMainScene: Scene {
     public init() {}
 
-    @StateObject private var store = TaskStore()
+    @StateObject private var chronaStore = ChronaStore()
     @StateObject private var settingsStore = ChronaSettingsStore()
 
     public var body: some Scene {
         Group {
             WindowGroup {
                 ContentView()
-                    .environmentObject(store)
+                    .environmentObject(chronaStore)
+                    .onAppear {
+                        if !chronaStore.isLoaded {
+                            chronaStore.loadInitialData()
+                        }
+                    }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(ChronaTokens.Colors.canvas, ignoresSafeAreaEdges: .all)
             }
@@ -24,6 +29,7 @@ public struct ChronaMainScene: Scene {
 
             Window("Settings", id: ChronaWindowID.settings) {
                 ChronaSettingsWindowView(store: settingsStore)
+                    .environmentObject(chronaStore)
             }
             .defaultSize(width: 800, height: 620)
         }

@@ -1,4 +1,4 @@
-    import Chrona
+import Chrona
 import SwiftUI
 
 @main

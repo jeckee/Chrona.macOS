@@ -3,6 +3,7 @@ import SwiftUI
 /// 设置窗口内布局：侧栏 + 内容区，铺满窗口（由系统窗口提供标题栏与阴影）。
 struct ChronaSettingsWindowView: View {
     @ObservedObject var store: ChronaSettingsStore
+    @EnvironmentObject private var chronaStore: ChronaStore
 
     private let shellFill = Color(red: 247 / 255, green: 247 / 255, blue: 248 / 255)
     private let contentMaxWidth: CGFloat = 576
@@ -32,5 +33,12 @@ struct ChronaSettingsWindowView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(shellFill)
         .chronaSettingsWindowChrome()
+        .onAppear {
+            store.bind(chronaStore: chronaStore)
+            store.reloadFromChronaStore()
+        }
+        .onDisappear {
+            store.persistNowIfBound()
+        }
     }
 }

@@ -154,15 +154,15 @@ enum ChronaTokens {
 
     enum Layout {
         /// 侧栏顶栏日期块最小宽度（内容水平居中，与两侧箭头间距对称）。
-        static let sidebarHeaderDateBlockMinWidth: CGFloat = 90
+        static let sidebarHeaderDateBlockMinWidth: CGFloat = 110
 
         // MARK: - 主窗口 HSplitView 分割条（左：任务列表 | 右：详情）
         /// 分割条拖到**最右**（侧栏最窄）时，左列宽度不低于此值。
-        static let sidebarMinWidth: CGFloat = 480
+        static let sidebarMinWidth: CGFloat = 500
         /// 新开窗口时左列首选宽度（`HSplitView` 的 ideal）。
-        static let sidebarIdealWidth: CGFloat = 480
+        static let sidebarIdealWidth: CGFloat = 500
         /// 分割条拖到**最左**（侧栏最宽）时，左列宽度不超过此值；实际还会受窗口总宽度与 `detailMinWidth` 限制（侧栏最大 ≈ 窗口宽 − 右侧最小宽）。
-        static let sidebarMaxWidth: CGFloat = 480
+        static let sidebarMaxWidth: CGFloat = 500
         /// 右侧详情列最小宽度；越大，分割条越不能往左拖（侧栏可到达的最大宽度越小）。
         static let detailMinWidth = Space.lg * Space.xl + Space.lg * Space.md + Space.sm
         static let popoverWidth = Space.lg * Space.lg + Space.xs

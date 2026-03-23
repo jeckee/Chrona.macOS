@@ -4,6 +4,7 @@ import SwiftUI
 struct AppKitTextEditor: NSViewRepresentable {
     @Binding var text: String
     @ObservedObject var controller: NoteEditingController
+    var onCommit: (() -> Void)? = nil
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: AppKitTextEditor
@@ -15,6 +16,10 @@ struct AppKitTextEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
             parent.text = tv.string
+        }
+
+        func textDidEndEditing(_ notification: Notification) {
+            parent.onCommit?()
         }
     }
 
