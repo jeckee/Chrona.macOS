@@ -14,6 +14,9 @@ final class TaskSchedulingService: TaskSchedulingServiceProtocol {
         modelId: String
     ) async throws -> SchedulingLLMResponse {
         let prompt = try SchedulingPromptBuilder.buildPrompt(from: request)
+        print("========== SCHEDULING PROMPT ==========")
+        print(prompt)
+        print("=======================================")
         let raw = try await aiService.runChatCompletion(
             provider: provider,
             apiKey: apiKey,
@@ -81,9 +84,7 @@ final class TaskSchedulingService: TaskSchedulingServiceProtocol {
             guard !start.isEmpty, !end.isEmpty else {
                 throw TaskSchedulingServiceError.invalidResponseSchema
             }
-            guard start.hasPrefix(request.selectedDate), end.hasPrefix(request.selectedDate) else {
-                throw TaskSchedulingServiceError.invalidScheduleDate("\(start) ~ \(end)")
-            }
+            // 不再检查是否严格前缀匹配 selectedDate，因为允许跨天或超出当天的排期
         }
 
         for item in response.scheduleResult.unscheduled {

@@ -22,11 +22,15 @@ class QwenAPIService {
         existingPlan: DayPlan? = nil,
         carryOverTasks: [(id: UUID, title: String)] = []
     ) async throws -> GeneratePlanResponse {
+        print("🚀🚀🚀 [generatePlan] 函数被调用！ 🚀🚀🚀")
         let logDateStr = Self.logDateFormatter.string(from: date)
+        print("➡️ 日期: \(logDateStr), 工作块数量: \(workingBlocks.count)")
+        
         logger.info("[generatePlan] 开始 date=\(logDateStr, privacy: .public) workingBlocks=\(workingBlocks.count, privacy: .public) existingPlan=\(existingPlan != nil, privacy: .public) carryOver=\(carryOverTasks.count, privacy: .public)")
 
         let apiKey = SettingsManager.shared.qwenAPIKey
         guard !apiKey.isEmpty else {
+            print("❌❌❌ 失败: 未配置 API Key ❌❌❌")
             logger.error("[generatePlan] 失败: 未配置 API Key")
             throw APIError.missingAPIKey
         }
@@ -122,6 +126,12 @@ class QwenAPIService {
           ]
         }
         """
+
+        print("========== QWEN API PROMPT ==========")
+        print(prompt)
+        print("=====================================")
+        // 移除 logger.info 打印 prompt，因为过长的字符串会导致 OSLog 报 bad range 错误
+        // logger.info("[generatePlan] 请求 prompt=\(prompt, privacy: .public)")
 
         let response = try await callAPI(prompt: prompt, apiKey: apiKey, operation: "generatePlan")
 

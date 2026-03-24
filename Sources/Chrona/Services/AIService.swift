@@ -73,7 +73,7 @@ final class AIService: AIServiceProtocol {
                 url: url,
                 apiKey: trimmedKey,
                 body: body,
-                timeoutInterval: 45
+                timeoutInterval: 120
             )
 
         case .deepseek:
@@ -92,7 +92,7 @@ final class AIService: AIServiceProtocol {
                 url: url,
                 apiKey: trimmedKey,
                 body: body,
-                timeoutInterval: 45
+                timeoutInterval: 120
             )
         }
     }
@@ -101,7 +101,7 @@ final class AIService: AIServiceProtocol {
         url: URL,
         apiKey: String,
         body: [String: Any],
-        timeoutInterval: TimeInterval = 15
+        timeoutInterval: TimeInterval = 30
     ) async throws -> String {
         var request = URLRequest(url: url, timeoutInterval: timeoutInterval)
         request.httpMethod = "POST"

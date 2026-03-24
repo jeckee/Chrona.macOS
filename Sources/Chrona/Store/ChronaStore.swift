@@ -701,13 +701,15 @@ final class ChronaStore: ObservableObject {
         unscheduledTasks: [ChronaTask]
     ) throws -> SchedulingServiceRequest {
         let dateText = Self.dateOnlyFormatter.string(from: selectedDate)
+        let currentTimeText = Self.isoDateTimeFormatter.string(from: Date())
         let scheduledPayload: [SchedulingServiceRequest.ScheduledTask] = scheduledTasks.compactMap { task in
             guard let block = scheduleBlock(forTaskId: task.id) else { return nil }
             return .init(
                 taskId: task.id.uuidString,
                 title: task.title,
                 start: Self.isoDateTimeFormatter.string(from: block.startAt),
-                end: Self.isoDateTimeFormatter.string(from: block.endAt)
+                end: Self.isoDateTimeFormatter.string(from: block.endAt),
+                status: task.status.rawValue
             )
         }
         let unscheduledPayload: [SchedulingServiceRequest.UnscheduledTask] = unscheduledTasks.map { task in
@@ -717,6 +719,7 @@ final class ChronaStore: ObservableObject {
                 estimatedMinutes: task.estimatedMinutes,
                 priority: task.priority.rawValue,
                 userTimeHint: task.userTimeHint,
+                status: task.status.rawValue,
                 needsAnalysis: !hasTaskBeenAnalyzed(task)
             )
         }
@@ -736,6 +739,7 @@ final class ChronaStore: ObservableObject {
 
         return SchedulingServiceRequest(
             selectedDate: dateText,
+            currentTime: currentTimeText,
             workingHours: workingHours,
             scheduledTasks: scheduledPayload,
             unscheduledTasks: unscheduledPayload
@@ -812,15 +816,9 @@ final class ChronaStore: ObservableObject {
 
         var parsedScheduledWindows: [(taskId: UUID, start: Date, end: Date)] = []
         for (taskId, item) in scheduleItemByTaskId {
-            guard item.start.hasPrefix(selectedDateText), item.end.hasPrefix(selectedDateText),
-                  let start = parseLLMDateTime(item.start),
+            guard let start = parseLLMDateTime(item.start),
                   let end = parseLLMDateTime(item.end),
-                  calendar.isDate(start, inSameDayAs: selectedDate),
-                  calendar.isDate(end, inSameDayAs: selectedDate),
                   start < end else {
-                throw TaskSchedulingServiceError.invalidScheduleDate("\(item.start) ~ \(item.end)")
-            }
-            guard isInWorkingHours(start: start, end: end, allowedRanges: allowedRanges) else {
                 throw TaskSchedulingServiceError.invalidScheduleDate("\(item.start) ~ \(item.end)")
             }
             parsedScheduledWindows.append((taskId, start, end))

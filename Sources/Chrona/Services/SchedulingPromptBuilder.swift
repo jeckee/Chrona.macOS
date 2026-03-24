@@ -7,6 +7,7 @@ enum SchedulingPromptBuilder {
         }
 
         let selectedDate = request.selectedDate
+        let currentTime = request.currentTime
         let workingHours = try jsonString(request.workingHours)
         let scheduledTasks = try jsonString(request.scheduledTasks)
         let unscheduledTasks = try jsonString(request.unscheduledTasks)
@@ -23,6 +24,7 @@ enum SchedulingPromptBuilder {
 - 仅对 `needs_analysis = true` 的任务做补全；`needs_analysis = false` 代表该任务已分析过，不要重复分析
 
 2. 基于：
+- 当前时间（很重要，因为当天时间可能已经过去了一部分）
 - 当前工作时间段
 - 已有的 SCHEDULED 任务
 - 刚补全信息的 UNSCHEDULED 任务
@@ -38,10 +40,14 @@ enum SchedulingPromptBuilder {
 5. 如果任务文本里包含明确时间信息，例如“14:00-15:00开会”，请把它视为强时间约束。
 6. 优先安排 high，再安排 medium，再安排 low。
 7. 如果当天工作时间不足，不要强行排满。可以保留部分任务为未排期。
-8. 生成的排期必须落在工作时间段内。
-9. 不要输出跨天排期。
+8. 优先将排期落在工作时间段内。并且，**排期的时间点不得早于当前时间**。如果当前时间（例如 14:00）晚于设定的工作开始时间（例如 13:00），排期应从当前时间（14:00）开始。
+9. 考虑任务的当前状态（status）：
+   - inProgress（进行中）：这是用户当前正在做的任务，应优先排在最前面（即当前时间点）。
+   - paused（已暂停）：优先安排，但可以在 inProgress 任务之后。
+   - done（已完成）：不要对已完成任务重新安排未发生的时间。如果它需要被排期，应保持或设定在过去/合理的时间段内。
+   - todo（未开始）：按优先级正常安排。
 10. 不要输出重叠的时间块。
-11. 如果某个任务明显不适合今天完成，也可以保留在未排期中，并说明原因。
+11. 如果今天剩余时间已经不够，不能完成所有任务，也可以超出工作时间安排。
 
 # 关于任务标题
 1. 尽量保留用户原始任务标题。
@@ -111,7 +117,7 @@ enum SchedulingPromptBuilder {
 - 以及这次新安排进去的任务
 - 时间必须是完整 ISO 格式
 - 不允许时间重叠
-- 不允许超出工作时间段
+- 允许超出工作时间段
 
 3. schedule_result.unscheduled：
 - 放当天无法合理安排的任务
@@ -123,6 +129,9 @@ enum SchedulingPromptBuilder {
 # 输入数据
 当前选中日期：
 \(selectedDate)
+
+当前时间：
+\(currentTime)
 
 工作时间段：
 \(workingHours)

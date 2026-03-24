@@ -11,6 +11,7 @@ struct SchedulingServiceRequest {
         let title: String
         let start: String
         let end: String
+        let status: String
     }
 
     struct UnscheduledTask: Encodable {
@@ -19,6 +20,7 @@ struct SchedulingServiceRequest {
         let estimatedMinutes: Int?
         let priority: String?
         let userTimeHint: String?
+        let status: String
         let needsAnalysis: Bool
 
         private enum CodingKeys: String, CodingKey {
@@ -27,11 +29,13 @@ struct SchedulingServiceRequest {
             case estimatedMinutes
             case priority
             case userTimeHint
+            case status
             case needsAnalysis = "needs_analysis"
         }
     }
 
     let selectedDate: String
+    let currentTime: String
     let workingHours: [WorkingHour]
     let scheduledTasks: [ScheduledTask]
     let unscheduledTasks: [UnscheduledTask]
