@@ -68,18 +68,28 @@ final class NotificationService: NotificationServiceProtocol {
     func cancelNotifications(identifiers: [String]) {
         guard !identifiers.isEmpty else { return }
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
+        center.removeDeliveredNotifications(withIdentifiers: identifiers)
     }
 
     func cancelPendingNotifications(withIdentifierPrefix prefix: String) async {
-        let requests: [UNNotificationRequest] = await withCheckedContinuation { cont in
+        let pendingRequests: [UNNotificationRequest] = await withCheckedContinuation { cont in
             center.getPendingNotificationRequests { reqs in
                 cont.resume(returning: reqs)
             }
         }
+        let deliveredNotifications: [UNNotification] = await withCheckedContinuation { cont in
+            center.getDeliveredNotifications { notifications in
+                cont.resume(returning: notifications)
+            }
+        }
 
-        let identifiers = requests
+        let pendingIdentifiers = pendingRequests
             .map(\.identifier)
             .filter { $0.hasPrefix(prefix) }
+        let deliveredIdentifiers = deliveredNotifications
+            .map { $0.request.identifier }
+            .filter { $0.hasPrefix(prefix) }
+        let identifiers = Array(Set(pendingIdentifiers + deliveredIdentifiers))
 
         cancelNotifications(identifiers: identifiers)
     }

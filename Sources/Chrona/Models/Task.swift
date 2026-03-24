@@ -69,8 +69,10 @@ struct ChronaTask: Codable, Equatable, Identifiable {
     var note: String?
     var status: ChronaTaskStatus
     var priority: ChronaTaskPriority
+    var isPriorityUserEdited: Bool
     var userTimeHint: String?
     var estimatedMinutes: Int?
+    var isDurationUserEdited: Bool
     var isScheduled: Bool
     var scheduleBlockId: UUID?
     var conclusion: String?
@@ -87,8 +89,10 @@ struct ChronaTask: Codable, Equatable, Identifiable {
         note: String? = nil,
         status: ChronaTaskStatus = .todo,
         priority: ChronaTaskPriority = .medium,
+        isPriorityUserEdited: Bool = false,
         userTimeHint: String? = nil,
         estimatedMinutes: Int? = nil,
+        isDurationUserEdited: Bool = false,
         isScheduled: Bool = false,
         scheduleBlockId: UUID? = nil,
         conclusion: String? = nil,
@@ -104,8 +108,10 @@ struct ChronaTask: Codable, Equatable, Identifiable {
         self.note = note
         self.status = status
         self.priority = priority
+        self.isPriorityUserEdited = isPriorityUserEdited
         self.userTimeHint = userTimeHint
         self.estimatedMinutes = estimatedMinutes
+        self.isDurationUserEdited = isDurationUserEdited
         self.isScheduled = isScheduled
         self.scheduleBlockId = scheduleBlockId
         self.conclusion = conclusion
@@ -124,8 +130,10 @@ struct ChronaTask: Codable, Equatable, Identifiable {
         case note
         case status
         case priority
+        case isPriorityUserEdited
         case userTimeHint
         case estimatedMinutes
+        case isDurationUserEdited
         case isScheduled
         case scheduleBlockId
         case conclusion
@@ -144,8 +152,10 @@ struct ChronaTask: Codable, Equatable, Identifiable {
         self.note = try c.decodeIfPresent(String.self, forKey: .note)
         self.status = try c.decode(ChronaTaskStatus.self, forKey: .status)
         self.priority = try c.decode(ChronaTaskPriority.self, forKey: .priority)
+        self.isPriorityUserEdited = try c.decodeIfPresent(Bool.self, forKey: .isPriorityUserEdited) ?? false
         self.userTimeHint = try c.decodeIfPresent(String.self, forKey: .userTimeHint)
         self.estimatedMinutes = try c.decodeIfPresent(Int.self, forKey: .estimatedMinutes)
+        self.isDurationUserEdited = try c.decodeIfPresent(Bool.self, forKey: .isDurationUserEdited) ?? false
         self.isScheduled = try c.decode(Bool.self, forKey: .isScheduled)
         self.scheduleBlockId = try c.decodeIfPresent(UUID.self, forKey: .scheduleBlockId)
         self.conclusion = try c.decodeIfPresent(String.self, forKey: .conclusion)

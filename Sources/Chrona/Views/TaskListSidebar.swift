@@ -226,6 +226,7 @@ struct TaskListSidebar: View {
                 .help("Use one AI call to complete and schedule today's tasks")
 
                 Button {
+                    chronaStore.debugPrintCurrentReminderPreview()
                     summaryPresented.toggle()
                 } label: {
                     HStack(spacing: ChronaTokens.Space.sm) {

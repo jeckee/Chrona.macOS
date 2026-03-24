@@ -2,6 +2,7 @@ import SwiftUI
 
 /// 设置窗口在 `openWindow` 中使用的稳定标识，须与 `Window(..., id:)` 一致。
 enum ChronaWindowID {
+    static let main = "chrona.main"
     static let settings = "chrona.settings"
 }
 
@@ -11,17 +12,21 @@ public struct ChronaMainScene: Scene {
 
     @StateObject private var chronaStore = ChronaStore()
     @StateObject private var settingsStore = ChronaSettingsStore()
+    @StateObject private var menuBarController = MenuBarController()
 
     public var body: some Scene {
         Group {
-            WindowGroup {
+            Window("Chrona", id: ChronaWindowID.main) {
                 ContentView()
                     .environmentObject(chronaStore)
                     .onAppear {
                         if !chronaStore.isLoaded {
                             chronaStore.loadInitialData()
                         }
+                        menuBarController.installIfNeeded()
                     }
+                    .chronaBindMainWindowOpener()
+                    .chronaBindMainWindowIdentity()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(ChronaTokens.Colors.canvas, ignoresSafeAreaEdges: .all)
             }

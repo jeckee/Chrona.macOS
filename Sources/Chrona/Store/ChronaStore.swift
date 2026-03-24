@@ -117,6 +117,7 @@ final class ChronaStore: ObservableObject {
     var canScheduleTask: Bool { selectedDateKind == .today }
     var canChangeTaskStatus: Bool { selectedDateKind == .today }
     var canEditConclusion: Bool { selectedDateKind == .today }
+    var canEditTaskCoreFields: Bool { selectedDateKind != .past }
 
     var isScheduling: Bool {
         if case .scheduling = scheduleExecutionState { return true }
@@ -253,12 +254,121 @@ final class ChronaStore: ObservableObject {
     }
 
     func updateTaskTitle(id: UUID, title: String) {
+        guard canEditTaskCoreFields else { return }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         guard let idx = indexOfTask(id: id) else { return }
 
         var list = tasks
         list[idx].title = trimmed
+        list[idx].updatedAt = Date()
+        tasks = list
+        saveTasks()
+    }
+
+    func updateTaskEstimatedMinutes(id: UUID, minutes: Int) {
+        updateTaskEstimatedMinutesWithScheduleAdjustment(id: id, minutes: minutes)
+    }
+
+    func updateTaskEstimatedMinutesWithScheduleAdjustment(id: UUID, minutes: Int) {
+        guard canEditTaskCoreFields else { return }
+        let normalizedMinutes = max(1, minutes)
+        guard let taskIndex = indexOfTask(id: id) else { return }
+
+        let task = tasks[taskIndex]
+        let now = Date()
+
+        if !task.isScheduled || scheduleBlock(forTaskId: id) == nil {
+            var list = tasks
+            list[taskIndex].estimatedMinutes = normalizedMinutes
+            list[taskIndex].isDurationUserEdited = true
+            list[taskIndex].updatedAt = now
+            tasks = list
+            saveTasks()
+            return
+        }
+
+        guard let currentBlockIndex = scheduleBlocks.firstIndex(where: { $0.taskId == id }) else { return }
+        let originalBlock = scheduleBlocks[currentBlockIndex]
+        let originalEnd = originalBlock.endAt
+        let proposedEnd = Calendar.current.date(byAdding: .minute, value: normalizedMinutes, to: originalBlock.startAt)
+            ?? originalBlock.startAt.addingTimeInterval(TimeInterval(normalizedMinutes * 60))
+        let baseDate = Calendar.current.startOfDay(for: originalBlock.startAt)
+
+        // B 策略：若会撞到后方固定时间锚点，则将当前任务结束时间截断到锚点前。
+        let anchorAfterCurrent = firstFixedAnchorStartAfter(
+            date: originalBlock.startAt,
+            on: baseDate,
+            in: scheduleBlocks,
+            tasks: tasks
+        )
+        let boundedEnd: Date
+        if let anchorAfterCurrent, proposedEnd > anchorAfterCurrent {
+            boundedEnd = anchorAfterCurrent
+        } else {
+            boundedEnd = proposedEnd
+        }
+        let boundedDurationMinutes = max(1, Int(boundedEnd.timeIntervalSince(originalBlock.startAt) / 60))
+
+        var tasksDraft = tasks
+        var blocksDraft = scheduleBlocks
+
+        tasksDraft[taskIndex].estimatedMinutes = boundedDurationMinutes
+        tasksDraft[taskIndex].isDurationUserEdited = true
+        tasksDraft[taskIndex].updatedAt = now
+        blocksDraft[currentBlockIndex].endAt = boundedEnd
+        blocksDraft[currentBlockIndex].updatedAt = now
+
+        let following = blocksDraft
+            .enumerated()
+            .filter { _, block in
+                block.taskId != id
+                    && Calendar.current.isDate(block.startAt, inSameDayAs: baseDate)
+                    && block.startAt >= originalEnd
+            }
+            .sorted { $0.element.startAt < $1.element.startAt }
+
+        var cursor = boundedEnd
+        var originalCursor = originalEnd
+        for (index, block) in following {
+            // A 策略：只调整“严格连续”的后续块；一旦不连续，立即停止局部联动。
+            guard areStrictlyContiguous(leftEnd: originalCursor, rightStart: block.startAt) else { break }
+            guard !isFixedTimeTask(taskId: block.taskId, in: tasksDraft) else { break }
+            let durationSeconds = max(60, block.endAt.timeIntervalSince(block.startAt))
+            let shiftedStart = cursor
+            let shiftedEnd = shiftedStart.addingTimeInterval(durationSeconds)
+
+            if let anchorStart = firstFixedAnchorStartAfter(date: boundedEnd, on: baseDate, in: blocksDraft, tasks: tasksDraft),
+               shiftedEnd > anchorStart {
+                break
+            }
+
+            blocksDraft[index].startAt = shiftedStart
+            blocksDraft[index].endAt = shiftedEnd
+            blocksDraft[index].updatedAt = now
+            cursor = shiftedEnd
+            originalCursor = block.endAt
+        }
+
+        tasks = tasksDraft
+        scheduleBlocks = blocksDraft
+        saveTasks()
+        saveScheduleBlocks()
+
+        Task { [weak self] in
+            guard let self else { return }
+            await self.refreshTaskRemindersForToday()
+        }
+    }
+
+    func updateTaskPriority(id: UUID, priority: ChronaTaskPriority) {
+        guard canEditTaskCoreFields else { return }
+        guard let idx = indexOfTask(id: id) else { return }
+
+        var list = tasks
+        guard list[idx].priority != priority else { return }
+        list[idx].priority = priority
+        list[idx].isPriorityUserEdited = true
         list[idx].updatedAt = Date()
         tasks = list
         saveTasks()
@@ -279,6 +389,7 @@ final class ChronaStore: ObservableObject {
     func startTask(id: UUID) {
         guard canChangeTaskStatus else { return }
         guard let idx = indexOfTask(id: id) else { return }
+        let reminderIds = reminderIdentifiers(forTaskId: id)
 
         var list = tasks
         let current = list[idx].status
@@ -293,6 +404,9 @@ final class ChronaStore: ObservableObject {
         list[idx] = t
         tasks = list
         saveTasks()
+
+        // 任务进入 inProgress 后不应再收到“即将开始”提醒。
+        notificationService.cancelNotifications(identifiers: reminderIds)
     }
 
     func pauseTask(id: UUID) {
@@ -311,6 +425,7 @@ final class ChronaStore: ObservableObject {
     func completeTask(id: UUID) {
         guard canChangeTaskStatus else { return }
         guard let idx = indexOfTask(id: id) else { return }
+        let reminderIds = reminderIdentifiers(forTaskId: id)
 
         var list = tasks
         let current = list[idx].status
@@ -324,6 +439,9 @@ final class ChronaStore: ObservableObject {
         list[idx] = t
         tasks = list
         saveTasks()
+
+        // 从 Scheduled 进入 Completed 后，不应继续保留该任务的开始前提醒。
+        notificationService.cancelNotifications(identifiers: reminderIds)
     }
 
     func resetTaskToTodo(id: UUID) {
@@ -338,6 +456,14 @@ final class ChronaStore: ObservableObject {
         list[idx].updatedAt = Date()
         tasks = list
         saveTasks()
+
+        // 若任务本身仍有有效排期块，恢复为 todo 后会重新回到 Scheduled，需要补建提醒。
+        if let block = scheduleBlock(forTaskId: id) {
+            Task { [weak self] in
+                guard let self else { return }
+                await self.scheduleTaskReminderIfNeeded(for: block)
+            }
+        }
     }
 
     func updateConclusion(id: UUID, conclusion: String?) {
@@ -593,10 +719,43 @@ final class ChronaStore: ObservableObject {
         "\(reminderIdentifierPrefix)\(scheduleBlockId.uuidString)"
     }
 
+    private func reminderIdentifiers(forTaskId taskId: UUID) -> [String] {
+        scheduleBlocks
+            .filter { $0.taskId == taskId }
+            .map { Self.reminderIdentifier(for: $0.id) }
+    }
+
+    /// 调试入口：打印“当前会被创建”的任务提醒时间与文案（基于内存状态，不读取系统 pending 列表）。
+    func debugPrintCurrentReminderPreview() {
+        let now = Date()
+        let formatter = Self.isoDateTimeFormatter
+        let previews = currentReminderPreviews(now: now)
+
+        print("=== Chrona Reminder Preview ===")
+        print("now: \(formatter.string(from: now))")
+        print("enabled: \(settings.taskReminderEnabled), minutesBefore: \(settings.reminderMinutesBefore)")
+        guard settings.taskReminderEnabled, settings.reminderMinutesBefore >= 0 else {
+            print("提醒已关闭或配置非法，当前不会创建任何提醒。")
+            print("=== End Reminder Preview ===")
+            return
+        }
+        guard !previews.isEmpty else {
+            print("当前没有可创建的未来提醒。")
+            print("=== End Reminder Preview ===")
+            return
+        }
+
+        for item in previews {
+            print("[\(item.identifier)] triggerAt=\(formatter.string(from: item.triggerAt)) title=\(item.title) body=\(item.body)")
+        }
+        print("=== End Reminder Preview ===")
+    }
+
     private func scheduleTaskReminderIfNeeded(for block: ScheduleBlock) async {
         guard settings.taskReminderEnabled, settings.reminderMinutesBefore >= 0 else { return }
 
         guard let task = tasks.first(where: { $0.id == block.taskId }) else { return }
+        guard task.status != .inProgress else { return }
         let now = Date()
         let todayStart = Calendar.current.startOfDay(for: now)
         guard Calendar.current.isDate(task.taskDate, inSameDayAs: todayStart) else { return }
@@ -612,6 +771,7 @@ final class ChronaStore: ObservableObject {
         let now2 = Date()
         let todayStart2 = Calendar.current.startOfDay(for: now2)
         guard let currentTask = tasks.first(where: { $0.id == block.taskId }) else { return }
+        guard currentTask.status != .inProgress else { return }
         guard currentTask.isScheduled, currentTask.scheduleBlockId == block.id else { return }
         guard scheduleBlocks.contains(where: { $0.id == block.id && $0.taskId == block.taskId }) else { return }
         guard Calendar.current.isDate(currentTask.taskDate, inSameDayAs: todayStart2) else { return }
@@ -634,6 +794,39 @@ final class ChronaStore: ObservableObject {
         )
     }
 
+    private func currentReminderPreviews(now: Date) -> [(identifier: String, title: String, body: String, triggerAt: Date)] {
+        let todayStart = Calendar.current.startOfDay(for: now)
+        let tasksById = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        var previews: [(identifier: String, title: String, body: String, triggerAt: Date)] = []
+
+        for block in scheduleBlocks {
+            guard let task = tasksById[block.taskId] else { continue }
+            guard task.isScheduled, task.scheduleBlockId == block.id else { continue }
+            guard task.status != .inProgress else { continue }
+            guard Calendar.current.isDate(task.taskDate, inSameDayAs: todayStart) else { continue }
+
+            let triggerAt = block.startAt.addingTimeInterval(-Double(settings.reminderMinutesBefore * 60))
+            guard triggerAt >= now else { continue }
+
+            let remainingMinutes = max(0, Int(floor(block.startAt.timeIntervalSince(now) / 60)))
+            let body: String
+            if remainingMinutes > 0 {
+                body = "\(task.title) 将在 \(remainingMinutes) 分钟后开始"
+            } else {
+                body = "现在开始：\(task.title)"
+            }
+
+            previews.append((
+                identifier: Self.reminderIdentifier(for: block.id),
+                title: "任务即将开始",
+                body: body,
+                triggerAt: triggerAt
+            ))
+        }
+
+        return previews.sorted { $0.triggerAt < $1.triggerAt }
+    }
+
     /// 刷新“今天(taskDate)”的未来提醒：取消旧待触发通知并按新设置重建。
     private func refreshTaskRemindersForToday() async {
         let now = Date()
@@ -647,6 +840,7 @@ final class ChronaStore: ObservableObject {
         let relevantBlocks = scheduleBlocks.filter { block in
             guard let task = tasksById[block.taskId] else { return false }
             guard task.isScheduled, task.scheduleBlockId == block.id else { return false }
+            guard task.status != .inProgress else { return false }
             return Calendar.current.isDate(task.taskDate, inSameDayAs: todayStart)
         }
 
@@ -667,6 +861,7 @@ final class ChronaStore: ObservableObject {
 
             // 再次校验：避免并发情况下调度出“已移出/删除”的提醒。
             guard let task = tasks.first(where: { $0.id == block.taskId }) else { continue }
+            guard task.status != .inProgress else { continue }
             guard task.isScheduled, task.scheduleBlockId == block.id else { continue }
             guard Calendar.current.isDate(task.taskDate, inSameDayAs: todayStart) else { continue }
             guard scheduleBlocks.contains(where: { $0.id == block.id && $0.taskId == block.taskId }) else { continue }
@@ -692,6 +887,31 @@ final class ChronaStore: ObservableObject {
 
     private func nextSortOrder() -> Int {
         (tasks.map(\.sortOrder).max() ?? -1) + 1
+    }
+
+    private func isFixedTimeTask(taskId: UUID, in tasks: [ChronaTask]) -> Bool {
+        guard let task = tasks.first(where: { $0.id == taskId }) else { return false }
+        let source = [task.userTimeHint ?? "", task.title]
+            .joined(separator: " ")
+            .lowercased()
+        // 覆盖常见输入：14:00-15:00 / 14:00~15:00 / 14:00 to 15:00
+        return source.range(of: #"\b([01]?\d|2[0-3]):[0-5]\d\s*([-~]|to)\s*([01]?\d|2[0-3]):[0-5]\d\b"#, options: .regularExpression) != nil
+    }
+
+    private func firstFixedAnchorStartAfter(date: Date, on day: Date, in blocks: [ScheduleBlock], tasks: [ChronaTask]) -> Date? {
+        let dayBlocks = blocks
+            .filter { Calendar.current.isDate($0.startAt, inSameDayAs: day) }
+            .sorted { $0.startAt < $1.startAt }
+        for block in dayBlocks where block.startAt >= date {
+            if isFixedTimeTask(taskId: block.taskId, in: tasks) {
+                return block.startAt
+            }
+        }
+        return nil
+    }
+
+    private func areStrictlyContiguous(leftEnd: Date, rightStart: Date) -> Bool {
+        abs(rightStart.timeIntervalSince(leftEnd)) < 1
     }
 
     // MARK: - Private — AI schedule flow
@@ -780,8 +1000,12 @@ final class ChronaStore: ObservableObject {
             guard let mappedPriority = ChronaTaskPriority(rawValue: update.priority) else {
                 throw TaskSchedulingServiceError.invalidTaskPriority(update.priority)
             }
-            tasksDraft[idx].estimatedMinutes = max(1, update.estimatedMinutes)
-            tasksDraft[idx].priority = mappedPriority
+            if !tasksDraft[idx].isDurationUserEdited {
+                tasksDraft[idx].estimatedMinutes = max(1, update.estimatedMinutes)
+            }
+            if !tasksDraft[idx].isPriorityUserEdited {
+                tasksDraft[idx].priority = mappedPriority
+            }
             let trimmedHint = update.timeHint.trimmingCharacters(in: .whitespacesAndNewlines)
             tasksDraft[idx].userTimeHint = trimmedHint.isEmpty ? nil : trimmedHint
             if !update.aiSuggestions.isEmpty {

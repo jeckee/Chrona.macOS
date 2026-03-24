@@ -85,6 +85,7 @@ class NotificationManager: NSObject, ObservableObject {
     // MARK: - Cancel Notifications
     func cancelAllNotifications() {
         center.removeAllPendingNotificationRequests()
+        center.removeAllDeliveredNotifications()
     }
 
     func cancelNotifications(for planItems: [PlanItem]) {
@@ -92,6 +93,7 @@ class NotificationManager: NSObject, ObservableObject {
             ["start-\(item.id.uuidString)"]
         }
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
+        center.removeDeliveredNotifications(withIdentifiers: identifiers)
     }
 }
 

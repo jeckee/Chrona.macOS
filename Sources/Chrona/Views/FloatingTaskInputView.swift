@@ -18,10 +18,33 @@ private enum FloatingInputMetrics {
 struct AutoSizingTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var calculatedHeight: CGFloat
+    @Binding var isComposingText: Bool
+    /// 与 `NSTextView` 实际内容同步，用于占位符叠层：`text` 可能比视图晚一帧更新。
+    @Binding var editorHasVisibleContent: Bool
     var onSubmit: () -> Void
 
+    final class CompositionAwareTextView: NSTextView {
+        var onCompositionStateChange: ((Bool) -> Void)?
+
+        override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+            super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
+            onCompositionStateChange?(true)
+        }
+
+        override func unmarkText() {
+            super.unmarkText()
+            onCompositionStateChange?(false)
+        }
+    }
+
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, calculatedHeight: $calculatedHeight, onSubmit: onSubmit)
+        Coordinator(
+            text: $text,
+            calculatedHeight: $calculatedHeight,
+            isComposingText: $isComposingText,
+            editorHasVisibleContent: $editorHasVisibleContent,
+            onSubmit: onSubmit
+        )
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -37,7 +60,7 @@ struct AutoSizingTextView: NSViewRepresentable {
         scroll.scrollerInsets = NSEdgeInsets(top: 4, left: 0, bottom: 4, right: 1)
         scroll.verticalScroller?.controlSize = .small
 
-        let tv = NSTextView()
+        let tv = CompositionAwareTextView()
         tv.delegate = context.coordinator
         tv.isRichText = false
         tv.drawsBackground = false
@@ -59,6 +82,10 @@ struct AutoSizingTextView: NSViewRepresentable {
         tv.maxSize = NSSize(width: 10_000, height: 10_000)
         tv.focusRingType = .none
         tv.string = text
+        tv.onCompositionStateChange = { [weak coordinator = context.coordinator, weak tv] _ in
+            guard let coordinator, let tv else { return }
+            coordinator.updateCompositionState(for: tv)
+        }
 
         scroll.documentView = tv
         context.coordinator.scrollView = scroll
@@ -73,38 +100,69 @@ struct AutoSizingTextView: NSViewRepresentable {
         guard let tv = scroll.documentView as? NSTextView else { return }
 
         if tv.string != text {
-            let selected = tv.selectedRange()
-            tv.string = text
-            let len = (text as NSString).length
-            let loc = min(selected.location, len)
-            tv.setSelectedRange(NSRange(location: loc, length: 0))
-            if text.isEmpty {
-                tv.scrollToBeginningOfDocument(nil)
+            // IME：标记文本已写入 tv，但 `text` 可能尚未更新，勿用旧 binding 覆盖。
+            if tv.hasMarkedText() {
+                // 保留 NSTextView；`textDidChange` 会同步 binding。
             } else {
-                tv.scrollToEndOfDocument(nil)
+                let selected = tv.selectedRange()
+                tv.string = text
+                let len = (text as NSString).length
+                let loc = min(selected.location, len)
+                tv.setSelectedRange(NSRange(location: loc, length: 0))
+                if text.isEmpty {
+                    tv.scrollToBeginningOfDocument(nil)
+                } else {
+                    tv.scrollToEndOfDocument(nil)
+                }
             }
         }
 
+        context.coordinator.syncEditorVisibleContent(for: tv)
+        context.coordinator.updateCompositionState(for: tv)
         context.coordinator.recalculateHeightAndLayout()
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         var calculatedHeight: Binding<CGFloat>
+        var isComposingText: Binding<Bool>
+        var editorHasVisibleContent: Binding<Bool>
         var onSubmit: () -> Void
         weak var scrollView: NSScrollView?
         weak var textView: NSTextView?
 
-        init(text: Binding<String>, calculatedHeight: Binding<CGFloat>, onSubmit: @escaping () -> Void) {
+        init(
+            text: Binding<String>,
+            calculatedHeight: Binding<CGFloat>,
+            isComposingText: Binding<Bool>,
+            editorHasVisibleContent: Binding<Bool>,
+            onSubmit: @escaping () -> Void
+        ) {
             self.text = text
             self.calculatedHeight = calculatedHeight
+            self.isComposingText = isComposingText
+            self.editorHasVisibleContent = editorHasVisibleContent
             self.onSubmit = onSubmit
+        }
+
+        func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let tv = self.textView else { return }
+                self.syncEditorVisibleContent(for: tv)
+            }
+            return true
         }
 
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
             text.wrappedValue = tv.string
+            syncEditorVisibleContent(for: tv)
+            updateCompositionState(for: tv)
             recalculateHeightAndLayout()
+        }
+
+        func textDidEndEditing(_ notification: Notification) {
+            isComposingText.wrappedValue = false
         }
 
         func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
@@ -170,6 +228,20 @@ struct AutoSizingTextView: NSViewRepresentable {
                 }
             }
         }
+
+        func updateCompositionState(for textView: NSTextView) {
+            let isComposing = textView.hasMarkedText()
+            if isComposingText.wrappedValue != isComposing {
+                isComposingText.wrappedValue = isComposing
+            }
+        }
+
+        func syncEditorVisibleContent(for textView: NSTextView) {
+            let visible = !textView.string.isEmpty || textView.hasMarkedText()
+            if editorHasVisibleContent.wrappedValue != visible {
+                editorHasVisibleContent.wrappedValue = visible
+            }
+        }
     }
 }
 
@@ -180,6 +252,8 @@ struct FloatingTaskInputView: View {
     var onSubmit: () -> Void
 
     @State private var calculatedHeight: CGFloat = FloatingInputMetrics.minHeight
+    @State private var isComposingText = false
+    @State private var editorHasVisibleContent = false
 
     private var visibleTextHeight: CGFloat {
         min(
@@ -213,9 +287,11 @@ struct FloatingTaskInputView: View {
                     AutoSizingTextView(
                         text: $text,
                         calculatedHeight: $calculatedHeight,
+                        isComposingText: $isComposingText,
+                        editorHasVisibleContent: $editorHasVisibleContent,
                         onSubmit: submit
                     )
-                    if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if !editorHasVisibleContent && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("Add task (e.g. 'Read docs for 45m')")
                             .font(.system(size: FloatingInputMetrics.fontSize, weight: .regular))
                             .foregroundStyle(ChronaTokens.Colors.subtext.opacity(0.55))
