@@ -25,22 +25,36 @@ final class ChronaStore: ObservableObject {
     @Published private(set) var lastError: Error?
     @Published private(set) var scheduleExecutionState: ScheduleExecutionState = .idle
 
+    /// 轻提示：仅用于“进入 today 自动延续未完成任务”的场景。
+    @Published private(set) var carryOverToast: String?
+    private var carryOverToastClearTask: Task<Void, Never>?
+
+    // MARK: - Today Summary（right detail，仅 today 可用）
+
+    @Published private(set) var isShowingTodaySummary: Bool = false
+    @Published private(set) var todaySummaryState: TodaySummaryState = .idle
+    @Published private(set) var todaySummaryContent: String = ""
+    @Published private(set) var todaySummaryGeneratedAt: Date?
+
     // MARK: - Dependencies
 
     private let storage: LocalStorageServiceProtocol
     private let notificationService: NotificationServiceProtocol
     private let taskSchedulingService: TaskSchedulingServiceProtocol
+    private let summaryService: SummaryServiceProtocol
 
     // MARK: - Init
 
     init(
         storage: LocalStorageServiceProtocol = LocalStorageService(),
         notificationService: NotificationServiceProtocol = NotificationService(),
-        taskSchedulingService: TaskSchedulingServiceProtocol = TaskSchedulingService()
+        taskSchedulingService: TaskSchedulingServiceProtocol = TaskSchedulingService(),
+        summaryService: SummaryServiceProtocol = SummaryService()
     ) {
         self.storage = storage
         self.notificationService = notificationService
         self.taskSchedulingService = taskSchedulingService
+        self.summaryService = summaryService
     }
 
     // MARK: - Errors
@@ -73,6 +87,11 @@ final class ChronaStore: ObservableObject {
             persistNormalizedData()
         }
 
+        // 首次加载：若当前 selectedDate 已经是 today，则执行一次迁移闭环。
+        if selectedDateKind == .today {
+            _ = carryOverPastIncompleteTasksToToday()
+        }
+
         reconcileSelectionAfterLoad()
 
         // 根据磁盘恢复提醒（仅为“今天(taskDate)”的排期块创建/更新本地通知）。
@@ -94,7 +113,252 @@ final class ChronaStore: ObservableObject {
         let normalized = Calendar.current.startOfDay(for: date)
         guard normalized != selectedDate else { return }
         selectedDate = normalized
+
+        // 仅作为最小改造：当用户切日期时清空 Summary 视图的状态，避免显示与 selectedDate 不一致内容。
+        if isShowingTodaySummary {
+            todaySummaryState = .idle
+            todaySummaryContent = ""
+            todaySummaryGeneratedAt = nil
+        }
+
+        // 仅当切到 today 时执行迁移闭环。
+        if selectedDateKind == .today {
+            _ = carryOverPastIncompleteTasksToToday()
+        }
+
         reconcileSelectionAfterDateChange()
+    }
+
+    // MARK: - Summary (today only)
+
+    func setSelection(_ id: UUID?) {
+        selection = id
+        if id != nil { isShowingTodaySummary = false }
+    }
+
+    /// 顶部 Summary 按钮点击入口：右侧切到 Summary 视图，并按规则（仅 today）生成/展示。
+    func showTodaySummary() {
+        isShowingTodaySummary = true
+        selection = nil
+
+        // 防止用户重复点击导致并发生成。
+        switch todaySummaryState {
+        case .loadingSavedSummary, .generating, .streaming:
+            return
+        default:
+            break
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            await self.loadOrGenerateTodaySummary(forceRefresh: false)
+        }
+    }
+
+    /// Summary 视图右上角 Refresh：强制重新生成（streaming），成功后覆盖保存。
+    func refreshTodaySummary() {
+        isShowingTodaySummary = true
+        selection = nil
+
+        // 生成中禁用再次点击。
+        switch todaySummaryState {
+        case .loadingSavedSummary, .generating, .streaming:
+            return
+        default:
+            break
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            await self.loadOrGenerateTodaySummary(forceRefresh: true)
+        }
+    }
+
+    private func loadOrGenerateTodaySummary(forceRefresh: Bool) async {
+        // 1) 判断 selectedDate 是否为 today
+        guard selectedDateKind == .today else {
+            todaySummaryState = .failure("Summary is only available for today.")
+            todaySummaryContent = ""
+            todaySummaryGeneratedAt = nil
+            return
+        }
+
+        // 2) 收集 today 任务（包含 done 与未 done）
+        let calendar = Calendar.current
+        let dayTasks = tasks.filter { calendar.isDate($0.taskDate, inSameDayAs: selectedDate) }
+
+        guard !dayTasks.isEmpty else {
+            todaySummaryState = .failure("No tasks for today")
+            todaySummaryContent = ""
+            todaySummaryGeneratedAt = nil
+            return
+        }
+
+        // 3) 检查 provider / apiKey
+        let provider = settings.selectedProvider
+        guard !provider.models.isEmpty else {
+            todaySummaryState = .failure(AIServiceError.providerNotSelected.userMessage)
+            return
+        }
+
+        let apiKey = settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !apiKey.isEmpty else {
+            todaySummaryState = .failure(AIServiceError.apiKeyEmpty.userMessage)
+            return
+        }
+
+        let modelId = settings.selectedModelId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? provider.defaultModelId
+            : settings.selectedModelId
+
+        // 4) 本地 summary 优先（首次 click）
+        todaySummaryState = .loadingSavedSummary
+
+        let savedSummary = try? storage.loadDailySummary(for: selectedDate)
+        if !forceRefresh, let savedSummary {
+            todaySummaryContent = savedSummary.content
+            todaySummaryGeneratedAt = savedSummary.generatedAt
+            todaySummaryState = .success
+            return
+        }
+
+        // 5) 需要生成：保留旧内容（refresh 失败要回退）
+        if forceRefresh, let savedSummary {
+            todaySummaryContent = savedSummary.content
+            todaySummaryGeneratedAt = savedSummary.generatedAt
+        } else if !forceRefresh {
+            todaySummaryContent = ""
+            todaySummaryGeneratedAt = nil
+        }
+
+        todaySummaryState = .generating
+
+        var draft = ""
+        var receivedAnyToken = false
+
+        do {
+            let stream = try summaryService.generateSummaryStream(
+                date: selectedDate,
+                tasks: dayTasks,
+                provider: provider,
+                apiKey: apiKey,
+                modelId: modelId
+            )
+
+            for try await token in stream {
+                receivedAnyToken = true
+                if todaySummaryState != .streaming {
+                    todaySummaryState = .streaming
+                }
+                draft.append(token)
+                todaySummaryContent = draft
+            }
+
+            let finalText = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard receivedAnyToken, !finalText.isEmpty else {
+                throw AIServiceError.invalidResponse
+            }
+
+            // 6) 生成完成后：保存到本地（成功后覆盖）
+            let newSummary = DailySummary(date: selectedDate, content: finalText)
+            do {
+                try storage.saveDailySummary(newSummary)
+            } catch {
+                // 本地保存失败：不覆盖旧内容
+                if let savedSummary {
+                    todaySummaryContent = savedSummary.content
+                    todaySummaryGeneratedAt = savedSummary.generatedAt
+                } else {
+                    todaySummaryContent = ""
+                    todaySummaryGeneratedAt = nil
+                }
+                todaySummaryState = .failure("Failed to save summary. Please try again.")
+                return
+            }
+
+            todaySummaryGeneratedAt = newSummary.generatedAt
+            todaySummaryContent = finalText
+            todaySummaryState = .success
+        } catch {
+            // 7) 流式过程中失败：停止并给清晰错误提示，不写入损坏 summary
+            let message: String
+            if let aiError = error as? AIServiceError {
+                message = aiError.userMessage
+            } else {
+                message = error.localizedDescription
+            }
+
+            if forceRefresh, let savedSummary {
+                todaySummaryContent = savedSummary.content
+                todaySummaryGeneratedAt = savedSummary.generatedAt
+            }
+
+            todaySummaryState = .failure(message)
+        }
+    }
+
+    // MARK: - Carry over past tasks (today entry only)
+
+    /// 将所有“过去日期中的未完成任务”迁移到今天，并统一进入 today 的 `UNSCHEDULED` 列表（todo + 无排期）。
+    ///
+    /// 规则（严格按题意）：
+    /// - 候选：`task.taskDate < today` 且 `task.status != .done`
+    /// - 迁移后：`taskDate=today`、`status=.todo`、`isScheduled=false`、`scheduleBlockId=nil`、`updatedAt=now`
+    /// - 若原任务有关联旧 `ScheduleBlock`：删除旧 blocks（不继承旧时间段）
+    /// - 取消旧 reminders（仅取消被删除的 ScheduleBlock 关联提醒），不为新迁移的未排期任务创建提醒
+    /// - 不复制任务，只原地修改任务本体
+    /// - Returns：迁移到今天的任务数量
+    @discardableResult
+    func carryOverPastIncompleteTasksToToday() -> Int {
+        let now = Date()
+        let todayStart = Calendar.current.startOfDay(for: now)
+
+        // 严格筛选候选任务
+        let movedTaskIds = Set(
+            tasks
+                .filter { $0.taskDate < todayStart && $0.status != .done }
+                .map(\.id)
+        )
+        guard !movedTaskIds.isEmpty else { return 0 }
+
+        var movedCount = 0
+        var updatedTasks = tasks
+        for i in updatedTasks.indices {
+            let task = updatedTasks[i]
+            guard task.taskDate < todayStart && task.status != .done else { continue }
+
+            movedCount += 1
+            updatedTasks[i].taskDate = todayStart
+            updatedTasks[i].status = .todo
+            updatedTasks[i].isScheduled = false
+            updatedTasks[i].scheduleBlockId = nil
+            updatedTasks[i].completedAt = nil
+            updatedTasks[i].updatedAt = now
+        }
+
+        // 删除旧 ScheduleBlock + 取消其关联旧提醒
+        let removedBlocks = scheduleBlocks.filter { movedTaskIds.contains($0.taskId) }
+        let reminderIds = removedBlocks.map { Self.reminderIdentifier(for: $0.id) }
+        notificationService.cancelNotifications(identifiers: reminderIds)
+
+        var updatedBlocks = scheduleBlocks
+        updatedBlocks.removeAll { movedTaskIds.contains($0.taskId) }
+
+        tasks = updatedTasks
+        scheduleBlocks = updatedBlocks
+        saveTasks()
+        saveScheduleBlocks()
+
+        // 轻提示（可选）
+        carryOverToastClearTask?.cancel()
+        carryOverToastClearTask = nil
+        carryOverToast = "\(movedCount) 个未完成任务已延续到今天"
+        carryOverToastClearTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.5))
+            await MainActor.run { self?.carryOverToast = nil }
+        }
+
+        return movedCount
     }
 
     // MARK: - Permission (based on selectedDate)
@@ -1295,6 +1559,30 @@ final class ChronaStore: ObservableObject {
         tasks = newTasks
         scheduleBlocks = blocks
         return changed
+    }
+}
+
+enum TodaySummaryState: Equatable {
+    case idle
+    case loadingSavedSummary
+    case generating
+    case streaming
+    case success
+    case failure(String)
+
+    static func == (lhs: TodaySummaryState, rhs: TodaySummaryState) -> Bool {
+        switch (lhs, rhs) {
+        case (.idle, .idle),
+             (.loadingSavedSummary, .loadingSavedSummary),
+             (.generating, .generating),
+             (.streaming, .streaming),
+             (.success, .success):
+            return true
+        case (.failure(let l), .failure(let r)):
+            return l == r
+        default:
+            return false
+        }
     }
 }
 

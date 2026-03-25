@@ -97,6 +97,115 @@ final class AIService: AIServiceProtocol {
         }
     }
 
+    func runChatCompletionStream(
+        provider: AIProvider,
+        apiKey: String,
+        modelId: String,
+        prompt: String
+    ) throws -> AsyncThrowingStream<String, Error> {
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedKey.isEmpty else { throw AIServiceError.apiKeyEmpty }
+
+        let resolvedModelId = modelId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? provider.defaultModelId
+            : modelId
+
+        let baseURL: String
+        switch provider {
+        case .qwen:
+            baseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        case .deepseek:
+            baseURL = "https://api.deepseek.com"
+        }
+
+        let url = URL(string: "\(baseURL)/chat/completions")!
+
+        // OpenAI-compatible streaming uses SSE. We only request `content` and stream deltas.
+        let body: [String: Any] = [
+            "model": resolvedModelId,
+            "messages": [["role": "user", "content": prompt]],
+            "temperature": 0.2,
+            "max_tokens": 800,
+            "stream": true
+        ]
+
+        return AsyncThrowingStream { continuation in
+            let streamTask = Task {
+                do {
+                    var request = URLRequest(url: url, timeoutInterval: 180)
+                    request.httpMethod = "POST"
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.setValue("Bearer \(trimmedKey)", forHTTPHeaderField: "Authorization")
+                    request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+                    let (byteStream, response) = try await session.bytes(for: request)
+                    guard let httpResponse = response as? HTTPURLResponse else {
+                        throw AIServiceError.invalidResponse
+                    }
+                    guard httpResponse.statusCode == 200 else {
+                        throw AIServiceError.providerError(
+                            statusCode: httpResponse.statusCode,
+                            message: nil
+                        )
+                    }
+
+                    for try await line in byteStream.lines {
+                        if Task.isCancelled { break }
+                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard trimmed.hasPrefix("data:") else { continue }
+
+                        let dataPart = trimmed
+                            .dropFirst("data:".count)
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                        if dataPart == "[DONE]" {
+                            break
+                        }
+
+                        guard let data = dataPart.data(using: .utf8) else { continue }
+                        guard
+                            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                            let choices = json["choices"] as? [[String: Any]],
+                            let firstChoice = choices.first
+                        else { continue }
+
+                        if let delta = firstChoice["delta"] as? [String: Any],
+                           let content = delta["content"] as? String,
+                           !content.isEmpty {
+                            continuation.yield(content)
+                        } else if let text = firstChoice["text"] as? String,
+                                  !text.isEmpty {
+                            // Some providers may stream `text` instead of `delta.content`.
+                            continuation.yield(text)
+                        }
+                    }
+
+                    if Task.isCancelled {
+                        throw CancellationError()
+                    }
+                    continuation.finish()
+                } catch let urlError as URLError {
+                    if urlError.code == .timedOut {
+                        continuation.finish(throwing: AIServiceError.timeout)
+                    } else {
+                        continuation.finish(
+                            throwing: AIServiceError.networkFailed(underlying: urlError)
+                        )
+                    }
+                } catch let aiError as AIServiceError {
+                    continuation.finish(throwing: aiError)
+                } catch {
+                    logger.error("AI stream failed with unknown error")
+                    continuation.finish(throwing: AIServiceError.unknown(underlying: error))
+                }
+            }
+
+            continuation.onTermination = { @Sendable _ in
+                streamTask.cancel()
+            }
+        }
+    }
+
     private func sendChatCompletion(
         url: URL,
         apiKey: String,

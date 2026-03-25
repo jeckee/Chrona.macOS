@@ -19,6 +19,11 @@ protocol LocalStorageServiceProtocol {
     func loadSettings() throws -> AppSettings
     func saveSettings(_ settings: AppSettings) throws
 
+    // MARK: - Daily Summary
+
+    func loadDailySummary(for date: Date) throws -> DailySummary?
+    func saveDailySummary(_ summary: DailySummary) throws
+
     // MARK: - Maintenance
 
     /// 清除所有本地数据文件，用于开发期重置。

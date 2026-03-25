@@ -11,6 +11,7 @@ enum AppFileManager {
     static let tasksFileName = "tasks.json"
     static let scheduleBlocksFileName = "schedule_blocks.json"
     static let settingsFileName = "settings.json"
+    static let dailySummariesFileName = "daily_summaries.json"
 
     // MARK: - Directory
 
@@ -50,6 +51,6 @@ enum AppFileManager {
 
     /// 所有受管理的 JSON 文件名列表。
     static var allFileNames: [String] {
-        [tasksFileName, scheduleBlocksFileName, settingsFileName]
+        [tasksFileName, scheduleBlocksFileName, settingsFileName, dailySummariesFileName]
     }
 }

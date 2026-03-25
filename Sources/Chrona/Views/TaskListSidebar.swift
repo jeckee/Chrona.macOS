@@ -3,7 +3,6 @@ import SwiftUI
 struct TaskListSidebar: View {
     @EnvironmentObject private var chronaStore: ChronaStore
     @State private var quickAddText: String = ""
-    @State private var summaryPresented: Bool = false
 
     private static let monthDayFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -134,13 +133,6 @@ struct TaskListSidebar: View {
                 .fill(ChronaTokens.Colors.border)
                 .frame(width: ChronaTokens.Surface.strokeWidth)
         }
-        .popover(isPresented: $summaryPresented, arrowEdge: .top) {
-            Text("Summary (demo): focus on scheduled work first, resolve conflicts early.")
-                .font(ChronaTokens.Typography.caption)
-                .foregroundStyle(ChronaTokens.Colors.text)
-                .chronaCard(fill: ChronaTokens.Colors.bg)
-                .frame(width: ChronaTokens.Layout.popoverWidth)
-        }
     }
 
     private var rowInsets: EdgeInsets {
@@ -226,8 +218,7 @@ struct TaskListSidebar: View {
                 .help("Use one AI call to complete and schedule today's tasks")
 
                 Button {
-                    chronaStore.debugPrintCurrentReminderPreview()
-                    summaryPresented.toggle()
+                    chronaStore.showTodaySummary()
                 } label: {
                     HStack(spacing: ChronaTokens.Space.sm) {
                         Image(systemName: "sparkles")
@@ -247,6 +238,13 @@ struct TaskListSidebar: View {
                 Text(text)
                     .font(ChronaTokens.Typography.caption)
                     .foregroundStyle(scheduleFeedbackColor)
+                    .lineLimit(1)
+            }
+
+            if let text = chronaStore.carryOverToast {
+                Text(text)
+                    .font(ChronaTokens.Typography.caption)
+                    .foregroundStyle(ChronaTokens.Colors.success)
                     .lineLimit(1)
             }
         }
@@ -279,7 +277,7 @@ struct TaskListSidebar: View {
     private var listSelectionBinding: Binding<UUID?> {
         Binding(
             get: { chronaStore.selection },
-            set: { chronaStore.selection = $0 }
+            set: { chronaStore.setSelection($0) }
         )
     }
 

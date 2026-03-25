@@ -28,7 +28,9 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detailPane: some View {
-        if let id = chronaStore.selection, chronaStore.tasks.contains(where: { $0.id == id }) {
+        if chronaStore.isShowingTodaySummary {
+            TodaySummaryView()
+        } else if let id = chronaStore.selection, chronaStore.tasks.contains(where: { $0.id == id }) {
             TaskDetailView(task: chronaStore.binding(for: id))
                 .id(id)
         } else {

@@ -51,6 +51,31 @@ final class LocalStorageService: LocalStorageServiceProtocol {
         try save(settings, to: AppFileManager.settingsFileName)
     }
 
+    // MARK: - Daily Summary
+
+    func loadDailySummary(for date: Date) throws -> DailySummary? {
+        let normalized = Calendar.current.startOfDay(for: date)
+        let summaries: [DailySummary] = try load(
+            from: AppFileManager.dailySummariesFileName,
+            defaultValue: []
+        )
+        let matches = summaries.filter { Calendar.current.isDate($0.date, inSameDayAs: normalized) }
+        return matches.max { $0.generatedAt < $1.generatedAt }
+    }
+
+    func saveDailySummary(_ summary: DailySummary) throws {
+        var summaries: [DailySummary] = try load(
+            from: AppFileManager.dailySummariesFileName,
+            defaultValue: []
+        )
+
+        let normalized = Calendar.current.startOfDay(for: summary.date)
+        summaries.removeAll { Calendar.current.isDate($0.date, inSameDayAs: normalized) }
+        summaries.append(DailySummary(date: normalized, content: summary.content, generatedAt: summary.generatedAt))
+
+        try save(summaries, to: AppFileManager.dailySummariesFileName)
+    }
+
     // MARK: - Maintenance
 
     func clearAllData() throws {
