@@ -45,6 +45,7 @@ struct TodaySummaryView: View {
                         Text(chronaStore.todaySummaryContent)
                             .font(ChronaTokens.Typography.body)
                             .foregroundStyle(ChronaTokens.Colors.text)
+                            .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }

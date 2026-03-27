@@ -4,9 +4,14 @@ import UserNotifications
 final class NotificationService: NotificationServiceProtocol {
     private let center = UNUserNotificationCenter.current()
 
+    private var cachedAuthorization: Bool?
     private var authorizationTask: Task<Bool, Never>?
 
     func requestAuthorizationIfNeeded() async -> Bool {
+        if let cached = cachedAuthorization, cached {
+            return true
+        }
+
         if let task = authorizationTask {
             return await task.value
         }
@@ -24,7 +29,6 @@ final class NotificationService: NotificationServiceProtocol {
             case .denied:
                 return false
             case .notDetermined, .provisional:
-                // 仅在首次（notDetermined）时真正触发弹窗；其余状态（provisional）按可用处理。
                 if status == .notDetermined {
                     let granted = await withCheckedContinuation { cont in
                         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
@@ -39,7 +43,12 @@ final class NotificationService: NotificationServiceProtocol {
             }
         }
 
-        return await authorizationTask!.value
+        let result = await authorizationTask!.value
+        authorizationTask = nil
+        if result {
+            cachedAuthorization = true
+        }
+        return result
     }
 
     func scheduleNotification(
@@ -53,7 +62,7 @@ final class NotificationService: NotificationServiceProtocol {
         content.body = body
         content.sound = .default
 
-        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: triggerAt)
+        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: triggerAt)
         let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
 
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)

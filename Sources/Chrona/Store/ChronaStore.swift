@@ -251,10 +251,11 @@ final class ChronaStore: ObservableObject {
                     todaySummaryState = .streaming
                 }
                 draft.append(token)
-                todaySummaryContent = draft
+                todaySummaryContent = Self.normalizeSummaryPlainText(draft)
             }
 
-            let finalText = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+            let finalText = Self.normalizeSummaryPlainText(draft)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             guard receivedAnyToken, !finalText.isEmpty else {
                 throw AIServiceError.invalidResponse
             }
@@ -684,6 +685,13 @@ final class ChronaStore: ObservableObject {
         list[idx].updatedAt = Date()
         tasks = list
         saveTasks()
+
+        if let block = scheduleBlock(forTaskId: id) {
+            Task { [weak self] in
+                guard let self else { return }
+                await self.scheduleTaskReminderIfNeeded(for: block)
+            }
+        }
     }
 
     func completeTask(id: UUID) {
@@ -983,6 +991,37 @@ final class ChronaStore: ObservableObject {
         "\(reminderIdentifierPrefix)\(scheduleBlockId.uuidString)"
     }
 
+    private enum ReminderL10n {
+        static var title: String {
+            NSLocalizedString(
+                "task_reminder_title",
+                bundle: .main,
+                value: "Task starting soon",
+                comment: "Title for task reminder notifications"
+            )
+        }
+
+        static func startsInMinutes(taskTitle: String, minutes: Int) -> String {
+            let format = NSLocalizedString(
+                "task_reminder_body_starts_in_minutes",
+                bundle: .main,
+                value: "%@ starts in %d minutes",
+                comment: "Body for task reminder shown before task starts"
+            )
+            return String(format: format, taskTitle, minutes)
+        }
+
+        static func startsNow(taskTitle: String) -> String {
+            let format = NSLocalizedString(
+                "task_reminder_body_starts_now",
+                bundle: .main,
+                value: "Starting now: %@",
+                comment: "Body for task reminder shown when task should start now"
+            )
+            return String(format: format, taskTitle)
+        }
+    }
+
     private func reminderIdentifiers(forTaskId taskId: UUID) -> [String] {
         scheduleBlocks
             .filter { $0.taskId == taskId }
@@ -1019,14 +1058,14 @@ final class ChronaStore: ObservableObject {
         guard settings.taskReminderEnabled, settings.reminderMinutesBefore >= 0 else { return }
 
         guard let task = tasks.first(where: { $0.id == block.taskId }) else { return }
-        guard task.status != .inProgress else { return }
+        guard task.status != .inProgress, task.status != .done else { return }
         let now = Date()
         let todayStart = Calendar.current.startOfDay(for: now)
         guard Calendar.current.isDate(task.taskDate, inSameDayAs: todayStart) else { return }
 
         let triggerTime = block.startAt.addingTimeInterval(-Double(settings.reminderMinutesBefore * 60))
         guard triggerTime >= now else { return }
-        let title = "任务即将开始"
+        let title = ReminderL10n.title
         let identifier = Self.reminderIdentifier(for: block.id)
         let granted = await notificationService.requestAuthorizationIfNeeded()
         guard granted else { return }
@@ -1035,19 +1074,19 @@ final class ChronaStore: ObservableObject {
         let now2 = Date()
         let todayStart2 = Calendar.current.startOfDay(for: now2)
         guard let currentTask = tasks.first(where: { $0.id == block.taskId }) else { return }
-        guard currentTask.status != .inProgress else { return }
+        guard currentTask.status != .inProgress, currentTask.status != .done else { return }
         guard currentTask.isScheduled, currentTask.scheduleBlockId == block.id else { return }
         guard scheduleBlocks.contains(where: { $0.id == block.id && $0.taskId == block.taskId }) else { return }
         guard Calendar.current.isDate(currentTask.taskDate, inSameDayAs: todayStart2) else { return }
         let triggerTime2 = block.startAt.addingTimeInterval(-Double(settings.reminderMinutesBefore * 60))
         guard triggerTime2 >= now2 else { return }
 
-        let remainingMinutes2 = max(0, Int(floor(block.startAt.timeIntervalSince(now2) / 60)))
+        let reminderLeadMinutes = max(0, settings.reminderMinutesBefore)
         let body2: String
-        if remainingMinutes2 > 0 {
-            body2 = "\(currentTask.title) 将在 \(remainingMinutes2) 分钟后开始"
+        if reminderLeadMinutes > 0 {
+            body2 = ReminderL10n.startsInMinutes(taskTitle: currentTask.title, minutes: reminderLeadMinutes)
         } else {
-            body2 = "现在开始：\(currentTask.title)"
+            body2 = ReminderL10n.startsNow(taskTitle: currentTask.title)
         }
 
         await notificationService.scheduleNotification(
@@ -1066,23 +1105,23 @@ final class ChronaStore: ObservableObject {
         for block in scheduleBlocks {
             guard let task = tasksById[block.taskId] else { continue }
             guard task.isScheduled, task.scheduleBlockId == block.id else { continue }
-            guard task.status != .inProgress else { continue }
+            guard task.status != .inProgress, task.status != .done else { continue }
             guard Calendar.current.isDate(task.taskDate, inSameDayAs: todayStart) else { continue }
 
             let triggerAt = block.startAt.addingTimeInterval(-Double(settings.reminderMinutesBefore * 60))
             guard triggerAt >= now else { continue }
 
-            let remainingMinutes = max(0, Int(floor(block.startAt.timeIntervalSince(now) / 60)))
+            let reminderLeadMinutes = max(0, settings.reminderMinutesBefore)
             let body: String
-            if remainingMinutes > 0 {
-                body = "\(task.title) 将在 \(remainingMinutes) 分钟后开始"
+            if reminderLeadMinutes > 0 {
+                body = ReminderL10n.startsInMinutes(taskTitle: task.title, minutes: reminderLeadMinutes)
             } else {
-                body = "现在开始：\(task.title)"
+                body = ReminderL10n.startsNow(taskTitle: task.title)
             }
 
             previews.append((
                 identifier: Self.reminderIdentifier(for: block.id),
-                title: "任务即将开始",
+                title: ReminderL10n.title,
                 body: body,
                 triggerAt: triggerAt
             ))
@@ -1104,7 +1143,7 @@ final class ChronaStore: ObservableObject {
         let relevantBlocks = scheduleBlocks.filter { block in
             guard let task = tasksById[block.taskId] else { return false }
             guard task.isScheduled, task.scheduleBlockId == block.id else { return false }
-            guard task.status != .inProgress else { return false }
+            guard task.status != .inProgress, task.status != .done else { return false }
             return Calendar.current.isDate(task.taskDate, inSameDayAs: todayStart)
         }
 
@@ -1125,18 +1164,18 @@ final class ChronaStore: ObservableObject {
 
             // 再次校验：避免并发情况下调度出“已移出/删除”的提醒。
             guard let task = tasks.first(where: { $0.id == block.taskId }) else { continue }
-            guard task.status != .inProgress else { continue }
+            guard task.status != .inProgress, task.status != .done else { continue }
             guard task.isScheduled, task.scheduleBlockId == block.id else { continue }
             guard Calendar.current.isDate(task.taskDate, inSameDayAs: todayStart) else { continue }
             guard scheduleBlocks.contains(where: { $0.id == block.id && $0.taskId == block.taskId }) else { continue }
 
-            let remainingMinutes = max(0, Int(floor(block.startAt.timeIntervalSince(now) / 60)))
-            let title = "任务即将开始"
+            let reminderLeadMinutes = max(0, settings.reminderMinutesBefore)
+            let title = ReminderL10n.title
             let body: String
-            if remainingMinutes > 0 {
-                body = "\(task.title) 将在 \(remainingMinutes) 分钟后开始"
+            if reminderLeadMinutes > 0 {
+                body = ReminderL10n.startsInMinutes(taskTitle: task.title, minutes: reminderLeadMinutes)
             } else {
-                body = "现在开始：\(task.title)"
+                body = ReminderL10n.startsNow(taskTitle: task.title)
             }
 
             let identifier = Self.reminderIdentifier(for: block.id)
@@ -1462,6 +1501,36 @@ final class ChronaStore: ObservableObject {
         formatter.timeZone = TimeZone.current
         return formatter
     }()
+
+    /// 将模型可能返回的 Markdown 轻量归一化为纯文本，避免 UI 文本视图展示 raw 语法。
+    private static func normalizeSummaryPlainText(_ raw: String) -> String {
+        var text = raw.replacingOccurrences(of: "\r\n", with: "\n")
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let normalized = lines.map { line -> String in
+            var s = line.trimmingCharacters(in: .whitespaces)
+
+            if s.hasPrefix("### ") { s = String(s.dropFirst(4)) }
+            else if s.hasPrefix("## ") { s = String(s.dropFirst(3)) }
+            else if s.hasPrefix("# ") { s = String(s.dropFirst(2)) }
+
+            if s.hasPrefix("- ") || s.hasPrefix("* ") {
+                s = "• " + s.dropFirst(2)
+            }
+
+            let orderedPrefixRegex = #"^\d+\.\s+"#
+            if let range = s.range(of: orderedPrefixRegex, options: .regularExpression) {
+                s.removeSubrange(range)
+            }
+            return s
+        }
+        text = normalized.joined(separator: "\n")
+
+        // 将常见 Markdown 强调符去掉，保留文本内容。
+        text = text.replacingOccurrences(of: "**", with: "")
+        text = text.replacingOccurrences(of: "__", with: "")
+        text = text.replacingOccurrences(of: "`", with: "")
+        return text
+    }
 
     // MARK: - Private — persistence
 

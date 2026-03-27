@@ -33,37 +33,40 @@ enum SummaryPromptBuilder {
             throw TaskSchedulingServiceError.invalidPromptInput
         }
 
-        // 注意：输出要求为纯文本（不要求 JSON），但结构必须固定为五部分标题。
+        // Output must be plain text (not JSON/Markdown), with a fixed five-section structure.
         return """
-你是一个工作助手。请基于输入数据，为指定日期生成“当日总结”。必须严格遵守规则：只依据输入，不要编造事实或细节。
+You are a work assistant. Based on the input data, generate a "daily summary" for the specified date. Follow the rules strictly: use only the provided input and do not invent facts or details.
 
-日期：\(dateText)
+Date: \(dateText)
 
-# 你的输出结构（固定为 5 部分，按顺序输出）
-1. 今日完成
-2. 今日未完成
-3. 关键进展
-4. 风险 / 阻塞
-5. 明日建议
+[OUTPUT STRUCTURE]
+Your output must contain exactly these 5 sections in order, each starting with the section title followed by a colon on its own line:
 
-# 分类规则
-- status 为 `done` 的任务归入「今日完成」，其他（`todo` / `inProgress` / `paused`）归入「今日未完成」。
-- 每个任务标题与其 status 可以用于辅助组织，但不要编造该任务在输入之外的事实。
-- conclusion 为空字符串（或不存在）时：仍然把任务按状态归入完成/未完成；但不要从空 conclusion 推断具体进展或阻塞。
+Completed Today:
+Not Completed Today:
+Key Progress:
+Risks / Blockers:
+Suggestions for Tomorrow:
 
-# 关键内容提炼
-- 「关键进展」：优先从 conclusion 中提炼“做了什么/推进到哪里”的信息；若所有 conclusion 都为空，则基于未完成任务的标题与状态给出简短的推进方向（避免具体细节编造）。
-- 「风险 / 阻塞」：当 conclusion 中出现问题、卡住、待继续、需要协作等语义时归纳到该部分。
-- 「明日建议」：尽量基于「今日未完成」与「风险 / 阻塞」提出明日的下一步建议，保持简洁可执行。
+[CLASSIFICATION RULES]
+• Tasks with status "done" belong to "Completed Today". All others ("todo" / "inProgress" / "paused") belong to "Not Completed Today".
+• You may use each task title and status to organize the summary, but do not add facts beyond the input.
+• If "conclusion" is an empty string (or missing), still classify by status, but do not infer specific progress or blockers from an empty conclusion.
 
-# 风格要求
-- 语言：与输入一致（中文）。
-- 简洁清晰，偏工作总结风格。
-- 不要输出 JSON，不要输出代码块，不要输出额外解释。
-- 每部分控制在 3~6 条要点，允许用换行分隔要点。
+[KEY CONTENT EXTRACTION]
+• "Key Progress": prioritize concrete "what was done / how far it moved" from conclusion. If all conclusions are empty, give brief direction based on titles and statuses of incomplete tasks (without inventing details).
+• "Risks / Blockers": summarize issues such as problems, being stuck, pending continuation, or collaboration needs when indicated in conclusion.
+• "Suggestions for Tomorrow": propose concise, actionable next steps based on "Not Completed Today" and "Risks / Blockers".
 
-# 输入数据（JSON 数组，每项为一个任务）
-[\(tasksJson)]
+[STYLE RULES]
+• Language: English only.
+• Keep it concise and clear, in a work-summary style.
+• ABSOLUTELY NO Markdown syntax: no #, no **, no *, no `, no ---, no numbered lists (1. 2. 3.).
+• Each section should contain 3 to 6 bullet points. Use "• " (bullet dot + space) at the start of each point.
+• Do not output JSON, code blocks, or extra explanations.
+
+[INPUT DATA]
+\(tasksJson)
 """
     }
 

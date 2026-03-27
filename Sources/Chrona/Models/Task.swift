@@ -2,20 +2,10 @@ import Foundation
 
 // MARK: - TaskBucket
 
-enum TaskBucket: String, CaseIterable, Identifiable {
+enum TaskBucket: String {
     case scheduled
     case unscheduled
     case completed
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .scheduled: return "Scheduled"
-        case .unscheduled: return "Unscheduled"
-        case .completed: return "Completed"
-        }
-    }
 }
 
 // MARK: - ChronaTaskStatus
@@ -169,20 +159,5 @@ struct ChronaTask: Codable, Equatable, Identifiable {
         let decodedTaskDate = try c.decodeIfPresent(Date.self, forKey: .taskDate)
         let fallback = self.createdAt
         self.taskDate = Calendar.current.startOfDay(for: decodedTaskDate ?? fallback)
-    }
-
-    /// 标记任务为已完成，设置 completedAt 和 updatedAt。
-    mutating func markDone() {
-        let now = Date()
-        status = .done
-        completedAt = now
-        updatedAt = now
-    }
-
-    /// 重新打开已完成的任务。
-    mutating func reopen() {
-        status = .todo
-        completedAt = nil
-        updatedAt = Date()
     }
 }
