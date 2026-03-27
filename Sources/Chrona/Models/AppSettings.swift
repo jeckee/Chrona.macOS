@@ -82,7 +82,7 @@ struct AppSettings: Equatable {
 
 // MARK: - AppSettings + Codable (向后兼容)
 
-extension AppSettings: Codable {
+    extension AppSettings: Codable {
     private enum CodingKeys: String, CodingKey {
         case selectedProvider
         case selectedProviderId // legacy
