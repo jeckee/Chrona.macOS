@@ -1,41 +1,57 @@
 import Foundation
 
-/// 仅支持两种模型提供方：Qwen / DeepSeek
+/// 支持的 AI 提供方（本轮固定 5 家，产品层相互独立）。
 enum AIProvider: String, Codable, CaseIterable, Identifiable, Hashable {
-    case qwen
+    case openai
+    case anthropic
+    case google
+    case openrouter
     case deepseek
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .qwen: return "Qwen"
+        case .openai: return "OpenAI"
+        case .anthropic: return "Anthropic"
+        case .google: return "Google"
+        case .openrouter: return "OpenRouter"
         case .deepseek: return "DeepSeek"
         }
     }
 
-    /// 本轮仅支持单一默认模型；后续如要扩展多模型菜单，可在此演进。
+    /// 每 Provider 单一默认模型；复杂模型列表不在本轮范围。
     var defaultModelId: String {
         switch self {
-        case .qwen:
-            // 按需求：Qwen 默认使用 qwen3.5 plus
-            return "qwen3.5-plus"
-        case .deepseek:
-            return "deepseek-chat"
+        case .openai: return "gpt-4o-mini"
+        case .anthropic: return "claude-3-5-haiku-20241022"
+        case .google: return "gemini-2.0-flash"
+        case .openrouter: return "openai/gpt-4o-mini"
+        case .deepseek: return "deepseek-chat"
         }
     }
 
-    /// UI 侧的模型菜单：本轮仅返回一个默认项。
     var models: [String] { [defaultModelId] }
 
-    /// 向后兼容旧版 `selectedProviderId`（显示名字符串）。
-    static func fromLegacyProviderId(_ legacy: String) -> AIProvider? {
-        switch legacy {
-        case "Alibaba DashScope (Qwen)":
-            return .qwen
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        let raw = try c.decode(String.self)
+        if let p = AIProvider(rawValue: raw) {
+            self = p
+            return
+        }
+        // 旧版 rawValue / 遗留字符串
+        switch raw {
+        case "qwen": self = .openai
+        case "deepseek": self = .deepseek
+        case "Alibaba DashScope (Qwen)": self = .openai
         default:
-            return nil
+            self = .openai
         }
     }
-}
 
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(rawValue)
+    }
+}

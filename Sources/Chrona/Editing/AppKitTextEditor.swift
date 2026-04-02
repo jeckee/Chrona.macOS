@@ -87,6 +87,8 @@ struct AppKitTextEditor: NSViewRepresentable {
         tv.font = .systemFont(ofSize: ChronaTokens.Typography.editorPointSize)
         tv.textColor = NSColor(ChronaTokens.Colors.text)
         tv.textContainerInset = NSSize(width: ChronaTokens.Card.padding, height: ChronaTokens.Card.padding)
+        // 默认 lineFragmentPadding 为 5，会与 SwiftUI 叠放的占位文案水平错位。
+        tv.textContainer?.lineFragmentPadding = 0
         tv.isVerticallyResizable = true
         tv.isHorizontallyResizable = false
         tv.autoresizingMask = [.width]

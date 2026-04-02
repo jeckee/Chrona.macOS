@@ -106,17 +106,17 @@ enum TaskSchedulingServiceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidPromptInput:
-            return "排期输入数据不完整。"
+            return "Scheduling input data is incomplete."
         case .responseJSONNotFound:
-            return "模型返回内容不是合法 JSON。"
+            return "The model did not return valid JSON."
         case .invalidResponseSchema:
-            return "模型返回 JSON 字段不完整或格式错误。"
+            return "The model JSON is missing fields or has an invalid format."
         case .invalidTaskPriority(let value):
-            return "模型返回了不支持的 priority 值：\(value)"
+            return "Unsupported priority value from the model: \(value)"
         case .invalidTaskId(let value):
-            return "模型返回了未知 taskId：\(value)"
+            return "Unknown taskId from the model: \(value)"
         case .invalidScheduleDate(let value):
-            return "模型返回了非法时间：\(value)"
+            return "Invalid time from the model: \(value)"
         }
     }
 }

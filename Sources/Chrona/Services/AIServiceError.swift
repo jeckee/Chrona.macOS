@@ -16,25 +16,25 @@ enum AIServiceError: Error {
     var userMessage: String {
         switch self {
         case .apiKeyEmpty:
-            return "API Key 为空，请先在设置中填写。"
+            return "API key is empty. Add it in Settings first."
         case .providerNotSelected:
-            return "未选择 AI Provider。"
+            return "No AI provider selected."
         case .networkFailed:
-            return "网络请求失败，请检查网络后重试。"
+            return "Network request failed. Check your connection and try again."
         case .timeout:
-            return "请求超时，请稍后重试。"
+            return "Request timed out. Try again later."
         case .authenticationFailed:
-            return "鉴权失败：API Key 无效或权限不足。"
+            return "Authentication failed: invalid API key or insufficient permissions."
         case .providerError(let statusCode, let message):
             if let message, !message.isEmpty {
-                return "Provider 返回错误（HTTP \(statusCode)）：\(message)"
+                return "Provider error (HTTP \(statusCode)): \(message)"
             } else {
-                return "Provider 返回错误（HTTP \(statusCode)）。"
+                return "Provider error (HTTP \(statusCode))."
             }
         case .invalidResponse:
-            return "Provider 返回了无效响应，无法解析。"
+            return "The provider returned a response that could not be parsed."
         case .unknown:
-            return "未知错误，请稍后重试。"
+            return "Something went wrong. Try again later."
         }
     }
 }

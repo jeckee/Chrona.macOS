@@ -14,17 +14,7 @@ struct RemindersSection: View {
                     isOn: $store.taskReminderEnabled,
                     title: "Task reminder",
                     subtitle: "Notify before next task",
-                    trailing: .leadPicker(selection: $store.taskReminderLead)
-                )
-
-                Divider()
-                    .overlay(ChronaTokens.Colors.border.opacity(0.6))
-
-                reminderRow(
-                    isOn: $store.dailySummaryEnabled,
-                    title: "Daily summary",
-                    subtitle: "End-of-day summary",
-                    trailing: .timePicker(selection: $store.dailySummaryTime)
+                    leadSelection: $store.taskReminderLead
                 )
             }
         }
@@ -56,16 +46,11 @@ struct RemindersSection: View {
         }
     }
 
-    private enum TrailingKind {
-        case leadPicker(selection: Binding<ChronaTaskReminderLead>)
-        case timePicker(selection: Binding<Date>)
-    }
-
     private func reminderRow(
         isOn: Binding<Bool>,
         title: String,
         subtitle: String,
-        trailing: TrailingKind
+        leadSelection: Binding<ChronaTaskReminderLead>
     ) -> some View {
         HStack(alignment: .center, spacing: ChronaTokens.Space.md) {
             Toggle("", isOn: isOn)
@@ -83,31 +68,18 @@ struct RemindersSection: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Group {
-                switch trailing {
-                case .leadPicker(let selection):
-                    HStack(spacing: ChronaTokens.Space.sm) {
-                        Text("Before")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(labelGray)
-                        Picker("", selection: selection) {
-                            ForEach(ChronaTaskReminderLead.allCases) { lead in
-                                Text(lead.rawValue.replacingOccurrences(of: "Before ", with: "")).tag(lead)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(minWidth: 100, alignment: .trailing)
-                    }
-                case .timePicker(let selection):
-                    HStack(spacing: ChronaTokens.Space.sm) {
-                        Text("Time")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(labelGray)
-                        DatePicker("", selection: selection, displayedComponents: .hourAndMinute)
-                            .labelsHidden()
+            HStack(spacing: ChronaTokens.Space.sm) {
+                Text("Before")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(labelGray)
+                Picker("", selection: leadSelection) {
+                    ForEach(ChronaTaskReminderLead.allCases) { lead in
+                        Text(lead.rawValue.replacingOccurrences(of: "Before ", with: "")).tag(lead)
                     }
                 }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(minWidth: 100, alignment: .trailing)
             }
             .opacity(isOn.wrappedValue ? 1 : 0.45)
             .disabled(!isOn.wrappedValue)

@@ -13,38 +13,51 @@ private enum FloatingInputMetrics {
     static let fontSize: CGFloat = 15
 }
 
+// MARK: - PlaceholderTextView
+
+/// NSTextView 子类：空内容时在 `textContainerOrigin` 处绘制占位符，
+/// 与正文共用同一套文本布局坐标，对齐天然一致。
+private final class PlaceholderTextView: NSTextView {
+    var placeholderString: String = ""
+    var placeholderColor: NSColor = .placeholderTextColor
+
+    override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
+        needsDisplay = true
+    }
+
+    override func unmarkText() {
+        super.unmarkText()
+        needsDisplay = true
+    }
+
+    override func didChangeText() {
+        super.didChangeText()
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard string.isEmpty, !hasMarkedText(), !placeholderString.isEmpty else { return }
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font ?? .systemFont(ofSize: FloatingInputMetrics.fontSize),
+            .foregroundColor: placeholderColor,
+        ]
+        NSAttributedString(string: placeholderString, attributes: attrs)
+            .draw(at: textContainerOrigin)
+    }
+}
+
 // MARK: - AutoSizingTextView
 
 struct AutoSizingTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var calculatedHeight: CGFloat
-    @Binding var isComposingText: Bool
-    /// 与 `NSTextView` 实际内容同步，用于占位符叠层：`text` 可能比视图晚一帧更新。
-    @Binding var editorHasVisibleContent: Bool
+    var placeholder: String = ""
     var onSubmit: () -> Void
 
-    final class CompositionAwareTextView: NSTextView {
-        var onCompositionStateChange: ((Bool) -> Void)?
-
-        override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
-            super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
-            onCompositionStateChange?(true)
-        }
-
-        override func unmarkText() {
-            super.unmarkText()
-            onCompositionStateChange?(false)
-        }
-    }
-
     func makeCoordinator() -> Coordinator {
-        Coordinator(
-            text: $text,
-            calculatedHeight: $calculatedHeight,
-            isComposingText: $isComposingText,
-            editorHasVisibleContent: $editorHasVisibleContent,
-            onSubmit: onSubmit
-        )
+        Coordinator(text: $text, calculatedHeight: $calculatedHeight, onSubmit: onSubmit)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -60,8 +73,10 @@ struct AutoSizingTextView: NSViewRepresentable {
         scroll.scrollerInsets = NSEdgeInsets(top: 4, left: 0, bottom: 4, right: 1)
         scroll.verticalScroller?.controlSize = .small
 
-        let tv = CompositionAwareTextView()
+        let tv = PlaceholderTextView()
         tv.delegate = context.coordinator
+        tv.placeholderString = placeholder
+        tv.placeholderColor = NSColor(ChronaTokens.Colors.subtext.opacity(0.55))
         tv.isRichText = false
         tv.drawsBackground = false
         tv.importsGraphics = false
@@ -82,27 +97,23 @@ struct AutoSizingTextView: NSViewRepresentable {
         tv.maxSize = NSSize(width: 10_000, height: 10_000)
         tv.focusRingType = .none
         tv.string = text
-        tv.onCompositionStateChange = { [weak coordinator = context.coordinator, weak tv] _ in
-            guard let coordinator, let tv else { return }
-            coordinator.updateCompositionState(for: tv)
-        }
 
         scroll.documentView = tv
         context.coordinator.scrollView = scroll
         context.coordinator.textView = tv
-
         context.coordinator.recalculateHeightAndLayout()
         return scroll
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.onSubmit = onSubmit
-        guard let tv = scroll.documentView as? NSTextView else { return }
+        guard let tv = scroll.documentView as? PlaceholderTextView else { return }
+
+        tv.placeholderString = placeholder
 
         if tv.string != text {
-            // IME：标记文本已写入 tv，但 `text` 可能尚未更新，勿用旧 binding 覆盖。
             if tv.hasMarkedText() {
-                // 保留 NSTextView；`textDidChange` 会同步 binding。
+                // 保留 NSTextView；textDidChange 会同步 binding。
             } else {
                 let selected = tv.selectedRange()
                 tv.string = text
@@ -114,132 +125,117 @@ struct AutoSizingTextView: NSViewRepresentable {
                 } else {
                     tv.scrollToEndOfDocument(nil)
                 }
+                tv.needsDisplay = true
             }
         }
 
-        context.coordinator.syncEditorVisibleContent(for: tv)
-        context.coordinator.updateCompositionState(for: tv)
         context.coordinator.recalculateHeightAndLayout()
     }
+
+    // MARK: - Coordinator
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         var calculatedHeight: Binding<CGFloat>
-        var isComposingText: Binding<Bool>
-        var editorHasVisibleContent: Binding<Bool>
         var onSubmit: () -> Void
         weak var scrollView: NSScrollView?
         weak var textView: NSTextView?
+        private var layoutWidthRetryCount = 0
+        private var deferredRecalculateScheduled = false
 
-        init(
-            text: Binding<String>,
-            calculatedHeight: Binding<CGFloat>,
-            isComposingText: Binding<Bool>,
-            editorHasVisibleContent: Binding<Bool>,
-            onSubmit: @escaping () -> Void
-        ) {
+        init(text: Binding<String>, calculatedHeight: Binding<CGFloat>, onSubmit: @escaping () -> Void) {
             self.text = text
             self.calculatedHeight = calculatedHeight
-            self.isComposingText = isComposingText
-            self.editorHasVisibleContent = editorHasVisibleContent
             self.onSubmit = onSubmit
-        }
-
-        func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
-            DispatchQueue.main.async { [weak self] in
-                guard let self, let tv = self.textView else { return }
-                self.syncEditorVisibleContent(for: tv)
-            }
-            return true
         }
 
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
             text.wrappedValue = tv.string
-            syncEditorVisibleContent(for: tv)
-            updateCompositionState(for: tv)
             recalculateHeightAndLayout()
-        }
-
-        func textDidEndEditing(_ notification: Notification) {
-            isComposingText.wrappedValue = false
         }
 
         func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-                if NSEvent.modifierFlags.contains(.shift) {
-                    return false
-                }
+                if NSEvent.modifierFlags.contains(.shift) { return false }
                 onSubmit()
                 return true
             }
             return false
         }
 
+        // MARK: Layout
+
         func recalculateHeightAndLayout() {
             guard let tv = textView, let scroll = scrollView,
                   let lm = tv.layoutManager, let tc = tv.textContainer
             else { return }
 
-            let visibleWidth = max(1, floor(scroll.bounds.width))
-            guard visibleWidth > 8 else { return }
-            tc.containerSize = NSSize(width: visibleWidth, height: CGFloat.greatestFiniteMagnitude)
-
-            lm.ensureLayout(for: tc)
-            let used = lm.usedRect(for: tc)
             let font = tv.font ?? .systemFont(ofSize: FloatingInputMetrics.fontSize)
             let lineH = ceil(lm.defaultLineHeight(for: font))
-            let rawContent = ceil(used.height)
-            let intrinsic = max(rawContent, lineH)
+            let scrollH = scroll.bounds.height
 
-            let visible = min(
-                max(intrinsic, FloatingInputMetrics.minHeight),
-                FloatingInputMetrics.maxHeight
-            )
-            let documentH = max(intrinsic, visible)
+            // 垂直居中不依赖宽度，即使首帧 width=0 也先把 inset 设好。
+            applyCentering(tv: tv, contentH: lineH, scrollH: scrollH)
 
-            let current = calculatedHeight.wrappedValue
-            if abs(current - intrinsic) >= 1 {
-                let binding = calculatedHeight
-                DispatchQueue.main.async {
-                    binding.wrappedValue = intrinsic
-                }
+            let contentW = scroll.contentView.bounds.width
+            let boundsW = scroll.bounds.width
+            let tvW = tv.bounds.width
+            let visibleWidth = max(1, floor(max(max(contentW, boundsW), tvW)))
+
+            guard visibleWidth > 8 else {
+                reportHeight(lineH)
+                scheduleDeferredRecalculate()
+                return
             }
+            layoutWidthRetryCount = 0
 
-            // 单行 / 空内容时 intrinsic 小于 documentH（受 minHeight 限制），否则首行贴顶、插入点不垂直居中。
-            let verticalInset = max(0, (documentH - intrinsic) / 2)
-            tv.textContainerInset = NSSize(width: 0, height: verticalInset)
+            tc.containerSize = NSSize(width: visibleWidth, height: CGFloat.greatestFiniteMagnitude)
+            lm.ensureLayout(for: tc)
+
+            let rawContent = ceil(lm.usedRect(for: tc).height)
+            let intrinsic = max(rawContent, lineH)
+            reportHeight(intrinsic)
+
+            applyCentering(tv: tv, contentH: intrinsic, scrollH: scrollH)
+
+            tv.frame = NSRect(x: 0, y: 0, width: visibleWidth, height: max(intrinsic, scrollH))
+            if scroll.documentView !== tv { scroll.documentView = tv }
 
             let len = (tv.string as NSString).length
             let caretAtEnd = tv.selectedRange().location >= len
-
-            tv.frame = NSRect(x: 0, y: 0, width: visibleWidth, height: documentH)
-            if scroll.documentView !== tv {
-                scroll.documentView = tv
-            }
-
-            if documentH > visible + 0.5, caretAtEnd {
-                let endRange = NSRange(location: len, length: 0)
-                tv.scrollRangeToVisible(endRange)
+            if intrinsic > scrollH + 0.5, caretAtEnd {
+                tv.scrollRangeToVisible(NSRange(location: len, length: 0))
                 DispatchQueue.main.async { [weak tv] in
                     guard let tv else { return }
-                    let n = (tv.string as NSString).length
-                    tv.scrollRangeToVisible(NSRange(location: n, length: 0))
+                    tv.scrollRangeToVisible(NSRange(location: (tv.string as NSString).length, length: 0))
                 }
             }
         }
 
-        func updateCompositionState(for textView: NSTextView) {
-            let isComposing = textView.hasMarkedText()
-            if isComposingText.wrappedValue != isComposing {
-                isComposingText.wrappedValue = isComposing
-            }
+        /// 用 `textContainerInset` 把内容在 scroll view 可视区域内垂直居中。
+        /// placeholder 通过 `textContainerOrigin` 自动跟随同一偏移，天然对齐。
+        private func applyCentering(tv: NSTextView, contentH: CGFloat, scrollH: CGFloat) {
+            guard scrollH > 0 else { return }
+            let frameH = max(contentH, scrollH)
+            let inset = max(0, ceil((frameH - contentH) / 2))
+            tv.textContainerInset = NSSize(width: 0, height: inset)
         }
 
-        func syncEditorVisibleContent(for textView: NSTextView) {
-            let visible = !textView.string.isEmpty || textView.hasMarkedText()
-            if editorHasVisibleContent.wrappedValue != visible {
-                editorHasVisibleContent.wrappedValue = visible
+        private func reportHeight(_ h: CGFloat) {
+            guard abs(calculatedHeight.wrappedValue - h) >= 1 else { return }
+            let binding = calculatedHeight
+            DispatchQueue.main.async { binding.wrappedValue = h }
+        }
+
+        private func scheduleDeferredRecalculate() {
+            guard layoutWidthRetryCount < 12, !deferredRecalculateScheduled else { return }
+            layoutWidthRetryCount += 1
+            deferredRecalculateScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.deferredRecalculateScheduled = false
+                self.recalculateHeightAndLayout()
             }
         }
     }
@@ -252,14 +248,9 @@ struct FloatingTaskInputView: View {
     var onSubmit: () -> Void
 
     @State private var calculatedHeight: CGFloat = FloatingInputMetrics.minHeight
-    @State private var isComposingText = false
-    @State private var editorHasVisibleContent = false
 
     private var visibleTextHeight: CGFloat {
-        min(
-            max(calculatedHeight, FloatingInputMetrics.minHeight),
-            FloatingInputMetrics.maxHeight
-        )
+        min(max(calculatedHeight, FloatingInputMetrics.minHeight), FloatingInputMetrics.maxHeight)
     }
 
     private var containerHeight: CGFloat {
@@ -270,35 +261,15 @@ struct FloatingTaskInputView: View {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// 与 `AutoSizingTextView` 里 `textContainerInset` 的上边距一致，占位符与首行垂直对齐。
-    private var centeredSingleLineTopPadding: CGFloat {
-        let intrinsic = calculatedHeight
-        let minH = FloatingInputMetrics.minHeight
-        let maxH = FloatingInputMetrics.maxHeight
-        let visible = min(max(intrinsic, minH), maxH)
-        let documentH = max(intrinsic, visible)
-        return max(0, (documentH - intrinsic) / 2)
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .bottom, spacing: FloatingInputMetrics.textButtonSpacing) {
-                ZStack(alignment: .topLeading) {
-                    AutoSizingTextView(
-                        text: $text,
-                        calculatedHeight: $calculatedHeight,
-                        isComposingText: $isComposingText,
-                        editorHasVisibleContent: $editorHasVisibleContent,
-                        onSubmit: submit
-                    )
-                    if !editorHasVisibleContent && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("Add task (e.g. 'Read docs for 45m')")
-                            .font(.system(size: FloatingInputMetrics.fontSize, weight: .regular))
-                            .foregroundStyle(ChronaTokens.Colors.subtext.opacity(0.55))
-                            .allowsHitTesting(false)
-                            .padding(.top, centeredSingleLineTopPadding + 1)
-                    }
-                }
+                AutoSizingTextView(
+                    text: $text,
+                    calculatedHeight: $calculatedHeight,
+                    placeholder: "Add task (e.g. 'Read docs for 45m')",
+                    onSubmit: submit
+                )
                 .frame(maxWidth: .infinity)
                 .frame(height: visibleTextHeight)
 

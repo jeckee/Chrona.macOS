@@ -349,8 +349,8 @@ struct TaskDetailView: View {
                     Text("Capture conclusions, thoughts, or blockers…")
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(Color(red: 156 / 255, green: 163 / 255, blue: 175 / 255))
-                        .padding(.horizontal, 17)
-                        .padding(.vertical, 16)
+                        .padding(.horizontal, 5 + ChronaTokens.Card.padding)
+                        .padding(.vertical, 5 + ChronaTokens.Card.padding)
                         .allowsHitTesting(false)
                 }
 

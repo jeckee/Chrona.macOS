@@ -24,6 +24,9 @@ final class TaskSchedulingService: TaskSchedulingServiceProtocol {
             prompt: prompt,
             forceJSONResponse: true
         )
+        print("========== RAW RESPONSE ==========")
+        print(raw)
+        print("=======================================")
         let jsonData = try extractJSONData(from: raw)
         let decoded = try decodeResponse(jsonData)
         try validate(decoded, against: request)

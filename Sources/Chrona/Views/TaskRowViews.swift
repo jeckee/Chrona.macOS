@@ -122,14 +122,21 @@ struct TaskListRow: View {
                 if bucket == .unscheduled {
                     RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
                         .strokeBorder(
-                            ChronaTokens.Colors.border,
-                            style: StrokeStyle(lineWidth: ChronaTokens.Surface.strokeWidth, dash: [6, 4])
+                            isSelected ? ChronaTokens.Colors.selectionStroke : ChronaTokens.Colors.border,
+                            style: StrokeStyle(
+                                lineWidth: isSelected
+                                    ? ChronaTokens.Surface.selectionRingWidth
+                                    : ChronaTokens.Surface.strokeWidth,
+                                dash: [6, 4]
+                            )
                         )
                 } else {
                     RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
                         .strokeBorder(
                             isSelected ? ChronaTokens.Colors.selectionStroke : ChronaTokens.Colors.border.opacity(0.35),
-                            lineWidth: ChronaTokens.Surface.strokeWidth
+                            lineWidth: isSelected
+                                ? ChronaTokens.Surface.selectionRingWidth
+                                : ChronaTokens.Surface.strokeWidth
                         )
                 }
             }

@@ -16,6 +16,7 @@ struct TodaySummaryView: View {
     }
 
     private var refreshDisabled: Bool {
+        if !chronaStore.canRegenerateDailySummary { return true }
         switch chronaStore.todaySummaryState {
         case .generating, .streaming, .loadingSavedSummary:
             return true
@@ -62,7 +63,7 @@ struct TodaySummaryView: View {
     private var contentHeader: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: ChronaTokens.Space.xs) {
-                Text("Today Summary")
+                Text("Daily Summary")
                     .font(ChronaTokens.Typography.cardTitle)
                     .foregroundStyle(ChronaTokens.Colors.text)
 
@@ -82,13 +83,20 @@ struct TodaySummaryView: View {
             }
             .buttonStyle(.plain)
             .disabled(refreshDisabled)
+            .help(
+                chronaStore.canRegenerateDailySummary
+                    ? "Regenerate today's summary with AI"
+                    : "Regenerate is only available when viewing today"
+            )
         }
     }
 
     private var placeholderText: String {
         switch chronaStore.todaySummaryState {
         case .idle:
-            return "Click Summary to generate today summary."
+            return chronaStore.canRegenerateDailySummary
+                ? "Click Summary to generate today's summary."
+                : "Click Summary to load this day's saved summary."
         case .loadingSavedSummary:
             return "Loading saved summary…"
         case .generating:

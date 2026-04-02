@@ -21,6 +21,8 @@ enum ChronaTokens {
     enum Surface {
         static let cornerRadius = Radius.md
         static let strokeWidth = Stroke.hairline
+        /// 侧边栏任务选中描边（比 hairline 更易辨认）。
+        static let selectionRingWidth: CGFloat = 2
     }
 
     enum Colors {
@@ -50,7 +52,7 @@ enum ChronaTokens {
         /// 主画布 `#F5F5F7`。
         static let canvas = Color(red: 245 / 255, green: 245 / 255, blue: 247 / 255)
         static let onFill = bg
-        static let selectionStroke = Color(red: 10 / 255, green: 122 / 255, blue: 255 / 255, opacity: 0.22)
+        static let selectionStroke = Color(red: 10 / 255, green: 122 / 255, blue: 255 / 255, opacity: 0.45)
         static let success = Color(red: 52 / 255, green: 199 / 255, blue: 89 / 255)
         static let aiCardBorder = Color(red: 10 / 255, green: 122 / 255, blue: 255 / 255, opacity: 0.1)
     }

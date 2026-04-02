@@ -5,15 +5,22 @@ import Foundation
 final class ChronaSettingsStore: ObservableObject {
     @Published var selectedPane: ChronaSettingsPane = .aiModel
 
-    @Published var provider: AIProvider = .qwen {
+    @Published var providerKeys: ProviderAPIKeys = ProviderAPIKeys()
+
+    @Published var provider: AIProvider = .openai {
+        willSet {
+            guard !isSyncing else { return }
+            providerKeys.setKey(apiKey, for: provider)
+        }
         didSet {
             guard !isSyncing else { return }
+            apiKey = providerKeys.key(for: provider)
             syncModelWithProvider()
         }
     }
 
     @Published var model: String = AppSettings.default.selectedModelId
-    @Published var apiKey: String = AppSettings.default.apiKey
+    @Published var apiKey: String = ""
     @Published var apiKeyVisible = false
     @Published var connectionState: AIConnectionState = .idle
 
@@ -21,8 +28,6 @@ final class ChronaSettingsStore: ObservableObject {
 
     @Published var taskReminderEnabled: Bool = AppSettings.default.taskReminderEnabled
     @Published var taskReminderLead: ChronaTaskReminderLead = .ten
-    @Published var dailySummaryEnabled: Bool = AppSettings.default.dailySummaryEnabled
-    @Published var dailySummaryTime: Date
 
     /// Model 菜单：保留磁盘上存在但不在当前 Provider 列表中的模型 id。
     var modelPickerOptions: [String] {
@@ -38,7 +43,6 @@ final class ChronaSettingsStore: ObservableObject {
     private var testTask: Task<Void, Never>?
 
     init() {
-        dailySummaryTime = Self.dateForToday(minutes: AppSettings.default.dailySummaryTimeMinutes)
         setupPersistPipeline()
     }
 
@@ -94,7 +98,9 @@ final class ChronaSettingsStore: ObservableObject {
         let currentApiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !currentApiKey.isEmpty else {
-            connectionState = .failure(message: AIServiceError.apiKeyEmpty.userMessage)
+            connectionState = .failure(
+                message: "The API key for \"\(currentProvider.displayName)\" is empty. Add it in Settings first."
+            )
             return
         }
 
@@ -129,12 +135,11 @@ final class ChronaSettingsStore: ObservableObject {
         let triggers: [AnyPublisher<Void, Never>] = [
             $model.map { _ in () }.eraseToAnyPublisher(),
             $apiKey.map { _ in () }.eraseToAnyPublisher(),
+            $providerKeys.map { _ in () }.eraseToAnyPublisher(),
             $provider.map { _ in () }.eraseToAnyPublisher(),
             $timeRanges.map { _ in () }.eraseToAnyPublisher(),
             $taskReminderLead.map { _ in () }.eraseToAnyPublisher(),
             $taskReminderEnabled.map { _ in () }.eraseToAnyPublisher(),
-            $dailySummaryEnabled.map { _ in () }.eraseToAnyPublisher(),
-            $dailySummaryTime.map { _ in () }.eraseToAnyPublisher(),
         ]
         persistSink = Publishers.MergeMany(triggers)
             .dropFirst(triggers.count)
@@ -155,8 +160,9 @@ final class ChronaSettingsStore: ObservableObject {
 
     private func applyAppSettingsToUI(_ app: AppSettings) {
         model = app.selectedModelId
-        apiKey = app.apiKey
+        providerKeys = app.providerAPIKeys
         provider = app.selectedProvider
+        apiKey = providerKeys.key(for: app.selectedProvider)
         timeRanges = app.workingHours.ranges.map {
             ChronaWorkingTimeRange(
                 id: $0.id,
@@ -166,8 +172,6 @@ final class ChronaSettingsStore: ObservableObject {
         }
         taskReminderLead = Self.reminderLead(for: app.reminderMinutesBefore)
         taskReminderEnabled = app.taskReminderEnabled
-        dailySummaryEnabled = app.dailySummaryEnabled
-        dailySummaryTime = Self.dateForToday(minutes: app.dailySummaryTimeMinutes)
 
         // reloadFromChronaStore() 会在 isSyncing = true 下运行 provider 的 didSet，
         // 所以这里手动保证 model 与 provider 的默认映射一致。
@@ -189,15 +193,15 @@ final class ChronaSettingsStore: ObservableObject {
                 endMinutes: Self.minutesSinceMidnight(from: $0.end)
             )
         }
+        var keys = providerKeys
+        keys.setKey(apiKey, for: provider)
         return AppSettings(
             selectedProvider: provider,
             selectedModelId: model,
-            apiKey: apiKey,
+            providerAPIKeys: keys,
             workingHours: WorkingHoursSetting(ranges: ranges),
             reminderMinutesBefore: Self.reminderMinutes(from: taskReminderLead),
-            taskReminderEnabled: taskReminderEnabled,
-            dailySummaryEnabled: dailySummaryEnabled,
-            dailySummaryTimeMinutes: Self.minutesSinceMidnight(from: dailySummaryTime)
+            taskReminderEnabled: taskReminderEnabled
         )
     }
 

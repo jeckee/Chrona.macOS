@@ -30,19 +30,19 @@ enum LocalStorageError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .appSupportDirectoryNotFound:
-            return "无法定位 Application Support 目录"
+            return "Could not locate the Application Support directory."
         case .directoryCreationFailed(let underlying):
-            return "创建 Chrona 数据目录失败: \(underlying.localizedDescription)"
+            return "Failed to create Chrona data directory: \(underlying.localizedDescription)"
         case .fileReadFailed(let filename, let underlying):
-            return "读取 \(filename) 失败: \(underlying.localizedDescription)"
+            return "Failed to read \(filename): \(underlying.localizedDescription)"
         case .fileWriteFailed(let filename, let underlying):
-            return "写入 \(filename) 失败: \(underlying.localizedDescription)"
+            return "Failed to write \(filename): \(underlying.localizedDescription)"
         case .decodingFailed(let filename, let underlying):
-            return "解码 \(filename) 失败: \(underlying.localizedDescription)"
+            return "Failed to decode \(filename): \(underlying.localizedDescription)"
         case .encodingFailed(let filename, let underlying):
-            return "编码 \(filename) 失败: \(underlying.localizedDescription)"
+            return "Failed to encode \(filename): \(underlying.localizedDescription)"
         case .fileDeletionFailed(let filename, let underlying):
-            return "删除 \(filename) 失败: \(underlying.localizedDescription)"
+            return "Failed to delete \(filename): \(underlying.localizedDescription)"
         }
     }
 }

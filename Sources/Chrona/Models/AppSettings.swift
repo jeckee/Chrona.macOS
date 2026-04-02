@@ -44,58 +44,108 @@ struct WorkingHoursSetting: Codable, Equatable {
     ])
 }
 
+// MARK: - ProviderAPIKeys
+
+/// 各 Provider 的 API Key 分字段存储，持久化稳定、不共用一条全局 key。
+struct ProviderAPIKeys: Equatable, Codable {
+    var openAI: String
+    var anthropic: String
+    var google: String
+    var openRouter: String
+    var deepSeek: String
+
+    init(
+        openAI: String = "",
+        anthropic: String = "",
+        google: String = "",
+        openRouter: String = "",
+        deepSeek: String = ""
+    ) {
+        self.openAI = openAI
+        self.anthropic = anthropic
+        self.google = google
+        self.openRouter = openRouter
+        self.deepSeek = deepSeek
+    }
+
+    func key(for provider: AIProvider) -> String {
+        switch provider {
+        case .openai: return openAI
+        case .anthropic: return anthropic
+        case .google: return google
+        case .openrouter: return openRouter
+        case .deepseek: return deepSeek
+        }
+    }
+
+    mutating func setKey(_ value: String, for provider: AIProvider) {
+        switch provider {
+        case .openai: openAI = value
+        case .anthropic: anthropic = value
+        case .google: google = value
+        case .openrouter: openRouter = value
+        case .deepseek: deepSeek = value
+        }
+    }
+
+    /// 是否全部为空（用于从旧版单 key 迁移）。
+    var isAllEmpty: Bool {
+        openAI.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && anthropic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && google.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && openRouter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && deepSeek.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
 // MARK: - AppSettings
 
 struct AppSettings: Equatable {
     var selectedProvider: AIProvider
     var selectedModelId: String
-    var apiKey: String
+    var providerAPIKeys: ProviderAPIKeys
     var workingHours: WorkingHoursSetting
     var reminderMinutesBefore: Int
     var taskReminderEnabled: Bool
-    var dailySummaryEnabled: Bool
-    /// 每日总结时间，用距午夜分钟数表示（与 workingHours 保持一致）。
-    var dailySummaryTimeMinutes: Int
 
     init(
-        selectedProvider: AIProvider = .qwen,
-        selectedModelId: String = AIProvider.qwen.defaultModelId,
-        apiKey: String = "",
+        selectedProvider: AIProvider = .openai,
+        selectedModelId: String = AIProvider.openai.defaultModelId,
+        providerAPIKeys: ProviderAPIKeys = ProviderAPIKeys(),
         workingHours: WorkingHoursSetting = .default,
         reminderMinutesBefore: Int = 10,
-        taskReminderEnabled: Bool = true,
-        dailySummaryEnabled: Bool = true,
-        dailySummaryTimeMinutes: Int = 1110 // 18:30
+        taskReminderEnabled: Bool = true
     ) {
         self.selectedProvider = selectedProvider
         self.selectedModelId = selectedModelId
-        self.apiKey = apiKey
+        self.providerAPIKeys = providerAPIKeys
         self.workingHours = workingHours
         self.reminderMinutesBefore = reminderMinutesBefore
         self.taskReminderEnabled = taskReminderEnabled
-        self.dailySummaryEnabled = dailySummaryEnabled
-        self.dailySummaryTimeMinutes = dailySummaryTimeMinutes
     }
 
     static let `default` = AppSettings()
+
+    /// 当前选中 Provider 对应 key（已 trim）。
+    func trimmedAPIKeyForSelectedProvider() -> String {
+        providerAPIKeys.key(for: selectedProvider).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
 
 // MARK: - AppSettings + Codable (向后兼容)
 
-    extension AppSettings: Codable {
+extension AppSettings: Codable {
     private enum CodingKeys: String, CodingKey {
         case selectedProvider
-        case selectedProviderId // legacy
+        case selectedProviderId
         case selectedModelId
         case apiKey
+        case providerAPIKeys
         case workingHours
         case reminderMinutesBefore
         case taskReminderEnabled
-        case dailySummaryEnabled
-        case dailySummaryTimeMinutes
     }
 
-    /// 自定义解码：缺失字段时回退到默认值，确保旧版 settings.json 可正常读取。
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let defaults = AppSettings.default
@@ -103,39 +153,50 @@ struct AppSettings: Equatable {
         if let p = try? c.decode(AIProvider.self, forKey: .selectedProvider) {
             self.selectedProvider = p
         } else if let legacyId = try? c.decode(String.self, forKey: .selectedProviderId),
-                  let mapped = AIProvider.fromLegacyProviderId(legacyId) {
+                  let mapped = AIProvider.fromLegacySettingsProviderId(legacyId) {
             self.selectedProvider = mapped
         } else {
             self.selectedProvider = defaults.selectedProvider
         }
 
         self.selectedModelId = (try? c.decode(String.self, forKey: .selectedModelId)) ?? defaults.selectedModelId
-        self.apiKey = (try? c.decode(String.self, forKey: .apiKey)) ?? defaults.apiKey
+
+        var keys = (try? c.decode(ProviderAPIKeys.self, forKey: .providerAPIKeys)) ?? ProviderAPIKeys()
+        let legacyKey = (try? c.decode(String.self, forKey: .apiKey)) ?? ""
+
+        if keys.isAllEmpty, !legacyKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            switch selectedProvider {
+            case .openai: keys.openAI = legacyKey
+            case .anthropic: keys.anthropic = legacyKey
+            case .google: keys.google = legacyKey
+            case .openrouter: keys.openRouter = legacyKey
+            case .deepseek: keys.deepSeek = legacyKey
+            }
+        }
+
+        self.providerAPIKeys = keys
         self.workingHours = (try? c.decode(WorkingHoursSetting.self, forKey: .workingHours)) ?? defaults.workingHours
         self.reminderMinutesBefore = (try? c.decode(Int.self, forKey: .reminderMinutesBefore)) ?? defaults.reminderMinutesBefore
         self.taskReminderEnabled = (try? c.decode(Bool.self, forKey: .taskReminderEnabled)) ?? defaults.taskReminderEnabled
-        self.dailySummaryEnabled = (try? c.decode(Bool.self, forKey: .dailySummaryEnabled)) ?? defaults.dailySummaryEnabled
-        self.dailySummaryTimeMinutes = (try? c.decode(Int.self, forKey: .dailySummaryTimeMinutes)) ?? defaults.dailySummaryTimeMinutes
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-
         try c.encode(selectedProvider, forKey: .selectedProvider)
-        // 同时写入 legacy 字段，保证旧版 settings.json 结构也能被部分逻辑识别（如存在）。
-        switch selectedProvider {
-        case .qwen:
-            try c.encode("Alibaba DashScope (Qwen)", forKey: .selectedProviderId)
-        case .deepseek:
-            break
-        }
-
         try c.encode(selectedModelId, forKey: .selectedModelId)
-        try c.encode(apiKey, forKey: .apiKey)
+        try c.encode(providerAPIKeys, forKey: .providerAPIKeys)
         try c.encode(workingHours, forKey: .workingHours)
         try c.encode(reminderMinutesBefore, forKey: .reminderMinutesBefore)
         try c.encode(taskReminderEnabled, forKey: .taskReminderEnabled)
-        try c.encode(dailySummaryEnabled, forKey: .dailySummaryEnabled)
-        try c.encode(dailySummaryTimeMinutes, forKey: .dailySummaryTimeMinutes)
+    }
+}
+
+private extension AIProvider {
+    /// 旧版 `selectedProviderId` 显示名。
+    static func fromLegacySettingsProviderId(_ legacy: String) -> AIProvider? {
+        switch legacy {
+        case "Alibaba DashScope (Qwen)": return .openai
+        default: return nil
+        }
     }
 }

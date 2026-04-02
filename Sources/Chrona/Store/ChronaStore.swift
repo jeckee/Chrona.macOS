@@ -29,7 +29,7 @@ final class ChronaStore: ObservableObject {
     @Published private(set) var carryOverToast: String?
     private var carryOverToastClearTask: Task<Void, Never>?
 
-    // MARK: - Today Summary（right detail，仅 today 可用）
+    // MARK: - Daily Summary（右侧详情；历史日仅读本地，今天可 AI 生成）
 
     @Published private(set) var isShowingTodaySummary: Bool = false
     @Published private(set) var todaySummaryState: TodaySummaryState = .idle
@@ -114,11 +114,12 @@ final class ChronaStore: ObservableObject {
         guard normalized != selectedDate else { return }
         selectedDate = normalized
 
-        // 仅作为最小改造：当用户切日期时清空 Summary 视图的状态，避免显示与 selectedDate 不一致内容。
+        // 若正在看 Summary，按新日期重新加载（今天可走 AI；过去/未来仅读本地已存）。
         if isShowingTodaySummary {
-            todaySummaryState = .idle
-            todaySummaryContent = ""
-            todaySummaryGeneratedAt = nil
+            Task { [weak self] in
+                guard let self else { return }
+                await self.loadOrGenerateTodaySummary(forceRefresh: false)
+            }
         }
 
         // 仅当切到 today 时执行迁移闭环。
@@ -129,14 +130,17 @@ final class ChronaStore: ObservableObject {
         reconcileSelectionAfterDateChange()
     }
 
-    // MARK: - Summary (today only)
+    // MARK: - Summary
+
+    /// 是否允许使用「Refresh」重新调用 AI（仅选中日为今天时为 true）。
+    var canRegenerateDailySummary: Bool { selectedDateKind == .today }
 
     func setSelection(_ id: UUID?) {
         selection = id
         if id != nil { isShowingTodaySummary = false }
     }
 
-    /// 顶部 Summary 按钮点击入口：右侧切到 Summary 视图，并按规则（仅 today）生成/展示。
+    /// 顶部 Summary 按钮：右侧切到 Summary；今天可生成/刷新，其它日期仅展示已保存内容。
     func showTodaySummary() {
         isShowingTodaySummary = true
         selection = nil
@@ -155,8 +159,10 @@ final class ChronaStore: ObservableObject {
         }
     }
 
-    /// Summary 视图右上角 Refresh：强制重新生成（streaming），成功后覆盖保存。
+    /// Summary 视图右上角 Refresh：仅今天可用；强制重新生成（streaming），成功后覆盖保存。
     func refreshTodaySummary() {
+        guard canRegenerateDailySummary else { return }
+
         isShowingTodaySummary = true
         selection = nil
 
@@ -175,11 +181,25 @@ final class ChronaStore: ObservableObject {
     }
 
     private func loadOrGenerateTodaySummary(forceRefresh: Bool) async {
-        // 1) 判断 selectedDate 是否为 today
-        guard selectedDateKind == .today else {
-            todaySummaryState = .failure("Summary is only available for today.")
-            todaySummaryContent = ""
-            todaySummaryGeneratedAt = nil
+        let sessionDay = Calendar.current.startOfDay(for: selectedDate)
+        func isStillSameSessionDay() -> Bool {
+            Calendar.current.isDate(selectedDate, inSameDayAs: sessionDay)
+        }
+
+        // 1) 非今天：只读本地（不调用 AI）
+        if selectedDateKind != .today {
+            todaySummaryState = .loadingSavedSummary
+            let saved = try? storage.loadDailySummary(for: sessionDay)
+            guard isStillSameSessionDay() else { return }
+            if let saved {
+                todaySummaryContent = saved.content
+                todaySummaryGeneratedAt = saved.generatedAt
+                todaySummaryState = .success
+            } else {
+                todaySummaryContent = ""
+                todaySummaryGeneratedAt = nil
+                todaySummaryState = .failure("No saved summary for this day.")
+            }
             return
         }
 
@@ -201,9 +221,11 @@ final class ChronaStore: ObservableObject {
             return
         }
 
-        let apiKey = settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiKey = settings.trimmedAPIKeyForSelectedProvider()
         guard !apiKey.isEmpty else {
-            todaySummaryState = .failure(AIServiceError.apiKeyEmpty.userMessage)
+            todaySummaryState = .failure(
+                "The API key for \"\(settings.selectedProvider.displayName)\" is empty. Add it in Settings first."
+            )
             return
         }
 
@@ -216,6 +238,7 @@ final class ChronaStore: ObservableObject {
 
         let savedSummary = try? storage.loadDailySummary(for: selectedDate)
         if !forceRefresh, let savedSummary {
+            guard isStillSameSessionDay() else { return }
             todaySummaryContent = savedSummary.content
             todaySummaryGeneratedAt = savedSummary.generatedAt
             todaySummaryState = .success
@@ -246,6 +269,7 @@ final class ChronaStore: ObservableObject {
             )
 
             for try await token in stream {
+                guard isStillSameSessionDay() else { return }
                 receivedAnyToken = true
                 if todaySummaryState != .streaming {
                     todaySummaryState = .streaming
@@ -253,6 +277,8 @@ final class ChronaStore: ObservableObject {
                 draft.append(token)
                 todaySummaryContent = Self.normalizeSummaryPlainText(draft)
             }
+
+            guard isStillSameSessionDay() else { return }
 
             let finalText = Self.normalizeSummaryPlainText(draft)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -265,6 +291,7 @@ final class ChronaStore: ObservableObject {
             do {
                 try storage.saveDailySummary(newSummary)
             } catch {
+                guard isStillSameSessionDay() else { return }
                 // 本地保存失败：不覆盖旧内容
                 if let savedSummary {
                     todaySummaryContent = savedSummary.content
@@ -277,6 +304,7 @@ final class ChronaStore: ObservableObject {
                 return
             }
 
+            guard isStillSameSessionDay() else { return }
             todaySummaryGeneratedAt = newSummary.generatedAt
             todaySummaryContent = finalText
             todaySummaryState = .success
@@ -288,6 +316,8 @@ final class ChronaStore: ObservableObject {
             } else {
                 message = error.localizedDescription
             }
+
+            guard isStillSameSessionDay() else { return }
 
             if forceRefresh, let savedSummary {
                 todaySummaryContent = savedSummary.content
@@ -353,7 +383,8 @@ final class ChronaStore: ObservableObject {
         // 轻提示（可选）
         carryOverToastClearTask?.cancel()
         carryOverToastClearTask = nil
-        carryOverToast = "\(movedCount) 个未完成任务已延续到今天"
+        let taskWord = movedCount == 1 ? "task" : "tasks"
+        carryOverToast = "\(movedCount) unfinished \(taskWord) carried over to today"
         carryOverToastClearTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2.5))
             await MainActor.run { self?.carryOverToast = nil }
@@ -751,7 +782,7 @@ final class ChronaStore: ObservableObject {
 
     // MARK: - Schedule
 
-    /// 手动加入排期：取当日第一段工作时间起点与默认时长（`estimatedMinutes` 或 30 分钟）；无有效工作时段时退化为「当前时间 + 默认时长」。
+    /// 手动加入排期：排在当前选中日、所有已有 Scheduled 任务之后；在剩余工作时段内取默认时长（`estimatedMinutes` 或 30 分钟）；无匹配工作段时退化为「不早于当前时间且晚于上述排期」的起点 + 默认时长。
     func scheduleTaskWithDefaultSlot(id: UUID) {
         guard canScheduleTask else { return }
         guard let task = tasks.first(where: { $0.id == id }) else { return }
@@ -763,9 +794,11 @@ final class ChronaStore: ObservableObject {
         let now = Date()
         let sortedRanges = settings.workingHours.ranges.sorted { $0.startMinutes < $1.startMinutes }
 
-        var startAt: Date = now.addingTimeInterval(TimeInterval(durationMinutes * 1))
-        var endAt: Date = calendar.date(byAdding: .minute, value: durationMinutes, to: now)
-            ?? now.addingTimeInterval(TimeInterval(durationMinutes * 60))
+        let afterOthers = latestScheduledBlockEndOnSelectedDay(excludingTaskId: id).map { max(now, $0) } ?? now
+
+        var startAt: Date = afterOthers
+        var endAt: Date = calendar.date(byAdding: .minute, value: durationMinutes, to: afterOthers)
+            ?? afterOthers.addingTimeInterval(TimeInterval(durationMinutes * 60))
 
         let todayComps = calendar.dateComponents([.year, .month, .day], from: now)
 
@@ -775,9 +808,9 @@ final class ChronaStore: ObservableObject {
             guard let rangeStart = calendar.date(from: sc),
                   let rangeEnd = calendar.date(from: ec) else { continue }
 
-            if rangeEnd <= now { continue }
+            if rangeEnd <= afterOthers { continue }
 
-            let slotStart = max(rangeStart, now)
+            let slotStart = max(rangeStart, afterOthers)
             var slotEnd = calendar.date(byAdding: .minute, value: durationMinutes, to: slotStart)
                 ?? slotStart.addingTimeInterval(TimeInterval(durationMinutes * 60))
             if slotEnd > rangeEnd { slotEnd = rangeEnd }
@@ -882,9 +915,11 @@ final class ChronaStore: ObservableObject {
             scheduleExecutionState = .failure(AIServiceError.providerNotSelected.userMessage)
             return
         }
-        let apiKey = settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiKey = settings.trimmedAPIKeyForSelectedProvider()
         guard !apiKey.isEmpty else {
-            scheduleExecutionState = .failure(AIServiceError.apiKeyEmpty.userMessage)
+            scheduleExecutionState = .failure(
+                "The API key for \"\(settings.selectedProvider.displayName)\" is empty. Add it in Settings first."
+            )
             return
         }
 
@@ -954,6 +989,23 @@ final class ChronaStore: ObservableObject {
 
     private func indexOfTask(id: UUID) -> Int? {
         tasks.firstIndex { $0.id == id }
+    }
+
+    /// 当前选中日、侧栏为 Scheduled 的其它任务中，排期块的最晚结束时间（不含 `excludingTaskId`）。
+    private func latestScheduledBlockEndOnSelectedDay(excludingTaskId excludeId: UUID) -> Date? {
+        var latest: Date?
+        for block in scheduleBlocks {
+            guard block.taskId != excludeId else { continue }
+            guard let t = tasks.first(where: { $0.id == block.taskId }) else { continue }
+            guard isTaskForSelectedDate(t) else { continue }
+            guard Self.bucket(for: t, scheduleBlocks: scheduleBlocks) == .scheduled else { continue }
+            if let cur = latest {
+                if block.endAt > cur { latest = block.endAt }
+            } else {
+                latest = block.endAt
+            }
+        }
+        return latest
     }
 
     private static func bucket(for task: ChronaTask, scheduleBlocks: [ScheduleBlock]) -> TaskBucket {
@@ -1664,9 +1716,9 @@ enum ChronaStoreError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidScheduleRange:
-            return "排期结束时间必须晚于开始时间。"
+            return "The scheduled end time must be after the start time."
         case .noWorkingHoursConfigured:
-            return "未配置有效工作时间段，请先在设置中配置。"
+            return "No valid working hours are configured. Add them in Settings first."
         }
     }
 }

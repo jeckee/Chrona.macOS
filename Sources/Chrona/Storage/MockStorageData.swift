@@ -11,7 +11,7 @@ extension ChronaTask {
         return [
             ChronaTask(
                 taskDate: todayStart,
-                title: "阅读 SwiftUI 文档",
+                title: "Read SwiftUI documentation",
                 status: .todo,
                 priority: .high,
                 estimatedMinutes: 45,
@@ -20,7 +20,7 @@ extension ChronaTask {
             ),
             ChronaTask(
                 taskDate: todayStart,
-                title: "修复登录页 Bug",
+                title: "Fix login page bug",
                 status: .inProgress,
                 priority: .high,
                 estimatedMinutes: 30,
@@ -29,7 +29,7 @@ extension ChronaTask {
             ),
             ChronaTask(
                 taskDate: todayStart,
-                title: "整理会议纪要",
+                title: "Organize meeting notes",
                 status: .todo,
                 priority: .medium,
                 estimatedMinutes: 20,
@@ -72,9 +72,9 @@ extension ScheduleBlock {
 
 extension AppSettings {
     static let mockSample = AppSettings(
-        selectedProvider: .qwen,
-        selectedModelId: "qwen3.5-plus",
-        apiKey: "sk-mock-key-for-testing",
+        selectedProvider: .openai,
+        selectedModelId: AIProvider.openai.defaultModelId,
+        providerAPIKeys: ProviderAPIKeys(openAI: "sk-mock-key-for-testing"),
         workingHours: .default,
         reminderMinutesBefore: 10
     )

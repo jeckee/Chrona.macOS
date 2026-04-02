@@ -1,0 +1,27 @@
+{
+  "object" : {
+    "artifacts" : [
+
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "chrona.macos.test",
+          "kind" : "fileSystem",
+          "location" : "/Users/zhangxincheng/Dev/chrona.macos.test",
+          "name" : "Chrona"
+        },
+        "state" : {
+          "name" : "fileSystem",
+          "path" : "/Users/zhangxincheng/Dev/chrona.macos.test"
+        },
+        "subpath" : "chrona.macos.test"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}
