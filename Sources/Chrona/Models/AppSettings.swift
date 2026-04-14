@@ -130,6 +130,13 @@ struct AppSettings: Equatable {
     func trimmedAPIKeyForSelectedProvider() -> String {
         providerAPIKeys.key(for: selectedProvider).trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    /// 是否具备调用 LLM 的条件：已选择可用的 Provider 且对应 API Key 非空。
+    var isAIAvailable: Bool {
+        let provider = selectedProvider
+        guard !provider.models.isEmpty else { return false }
+        return !trimmedAPIKeyForSelectedProvider().isEmpty
+    }
 }
 
 // MARK: - AppSettings + Codable (向后兼容)

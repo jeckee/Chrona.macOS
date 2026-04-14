@@ -214,36 +214,40 @@ final class ChronaStore: ObservableObject {
             return
         }
 
-        // 3) 检查 provider / apiKey
+        // 3) 本地 summary 优先（无需 API Key 即可阅读已生成内容）
+        if !forceRefresh {
+            todaySummaryState = .loadingSavedSummary
+            if let savedSummary = try? storage.loadDailySummary(for: selectedDate) {
+                guard isStillSameSessionDay() else { return }
+                todaySummaryContent = savedSummary.content
+                todaySummaryGeneratedAt = savedSummary.generatedAt
+                todaySummaryState = .success
+                return
+            }
+        }
+
+        // 4) 需要生成或刷新，但未配置 AI：不调用模型、不编造内容
+        guard isAIAvailable else {
+            guard isStillSameSessionDay() else { return }
+            let savedSummary = try? storage.loadDailySummary(for: selectedDate)
+            if forceRefresh, let savedSummary {
+                todaySummaryContent = savedSummary.content
+                todaySummaryGeneratedAt = savedSummary.generatedAt
+            } else if !forceRefresh {
+                todaySummaryContent = ""
+                todaySummaryGeneratedAt = nil
+            }
+            todaySummaryState = .needsAPIKeyForWrapUp
+            return
+        }
+
         let provider = settings.selectedProvider
-        guard !provider.models.isEmpty else {
-            todaySummaryState = .failure(AIServiceError.providerNotSelected.userMessage)
-            return
-        }
-
         let apiKey = settings.trimmedAPIKeyForSelectedProvider()
-        guard !apiKey.isEmpty else {
-            todaySummaryState = .failure(
-                "The API key for \"\(settings.selectedProvider.displayName)\" is empty. Add it in Settings first."
-            )
-            return
-        }
-
         let modelId = settings.selectedModelId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? provider.defaultModelId
             : settings.selectedModelId
 
-        // 4) 本地 summary 优先（首次 click）
-        todaySummaryState = .loadingSavedSummary
-
         let savedSummary = try? storage.loadDailySummary(for: selectedDate)
-        if !forceRefresh, let savedSummary {
-            guard isStillSameSessionDay() else { return }
-            todaySummaryContent = savedSummary.content
-            todaySummaryGeneratedAt = savedSummary.generatedAt
-            todaySummaryState = .success
-            return
-        }
 
         // 5) 需要生成：保留旧内容（refresh 失败要回退）
         if forceRefresh, let savedSummary {
@@ -411,6 +415,9 @@ final class ChronaStore: ObservableObject {
     var canAddTask: Bool { selectedDateKind != .past }
     var canDeleteTask: Bool { selectedDateKind != .past }
     var canScheduleTask: Bool { selectedDateKind == .today }
+
+    /// 当前设置下是否可调用 LLM（Provider 可用且对应 API Key 已填写）。
+    var isAIAvailable: Bool { settings.isAIAvailable }
     var canChangeTaskStatus: Bool { selectedDateKind == .today }
     var canEditConclusion: Bool { selectedDateKind == .today }
     var canEditTaskCoreFields: Bool { selectedDateKind != .past }
@@ -900,9 +907,13 @@ final class ChronaStore: ObservableObject {
         notificationService.cancelNotifications(identifiers: reminderIds)
     }
 
-    /// 一次 LLM 调用完成：当前日期未排期任务补全 + 自动排期落地。
+    /// 一次 LLM 调用完成：当前日期未排期任务补全 + 自动排期落地（需 `isAIAvailable`）。
     func scheduleCurrentDay() async {
         guard !isScheduling else { return }
+        guard isAIAvailable else {
+            scheduleExecutionState = .idle
+            return
+        }
         scheduleExecutionState = .scheduling
 
         guard canScheduleTask else {
@@ -911,17 +922,7 @@ final class ChronaStore: ObservableObject {
         }
 
         let provider = settings.selectedProvider
-        guard !provider.models.isEmpty else {
-            scheduleExecutionState = .failure(AIServiceError.providerNotSelected.userMessage)
-            return
-        }
         let apiKey = settings.trimmedAPIKeyForSelectedProvider()
-        guard !apiKey.isEmpty else {
-            scheduleExecutionState = .failure(
-                "The API key for \"\(settings.selectedProvider.displayName)\" is empty. Add it in Settings first."
-            )
-            return
-        }
 
         let modelId = settings.selectedModelId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? provider.defaultModelId
@@ -969,6 +970,97 @@ final class ChronaStore: ObservableObject {
         } catch {
             record(error)
             scheduleExecutionState = .failure("Scheduling failed. Please try again.")
+        }
+    }
+
+    /// 无 LLM 的基础排期：仅处理今日未排期任务，按优先级顺序填充，避开当日已有排期块。
+    func performBasicScheduling() {
+        guard !isScheduling else { return }
+        scheduleExecutionState = .scheduling
+
+        guard canScheduleTask else {
+            scheduleExecutionState = .failure("Scheduling is only available for today.")
+            return
+        }
+
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: selectedDate)
+        let now = Date()
+        let dayTasks = tasks.filter { calendar.isDate($0.taskDate, inSameDayAs: selectedDate) }
+        let unscheduledOrdered = tasks(in: .unscheduled)
+        guard !unscheduledOrdered.isEmpty else {
+            scheduleExecutionState = .failure("No unscheduled tasks to process.")
+            return
+        }
+
+        let scheduledOnDay = dayTasks.filter { sidebarBucket(for: $0) == .scheduled }
+        var occupiedIntervals = BasicSchedulingPlanner.occupiedIntervalsFromBlocks(
+            scheduledOnDay.compactMap { scheduleBlock(forTaskId: $0.id) }
+        )
+        var merged = BasicSchedulingPlanner.mergedOccupiedIntervals(occupiedIntervals)
+
+        let toSchedule = BasicSchedulingPlanner.sortedForBasicScheduling(unscheduledOrdered)
+        var tasksDraft = tasks
+        var blocksDraft = scheduleBlocks
+        var cancelledReminderIds: [String] = []
+
+        var cursor = max(now, dayStart)
+
+        for task in toSchedule {
+            let durationMinutes = max(1, task.estimatedMinutes ?? 30)
+            let durationSeconds = TimeInterval(durationMinutes * 60)
+            let startAt = BasicSchedulingPlanner.nextSlotStart(
+                cursor: cursor,
+                durationSeconds: durationSeconds,
+                occupied: merged
+            )
+            let endAt = startAt.addingTimeInterval(durationSeconds)
+
+            guard let tIdx = tasksDraft.firstIndex(where: { $0.id == task.id }) else { continue }
+
+            let oldBlocks = blocksDraft.filter { $0.taskId == task.id }
+            cancelledReminderIds.append(contentsOf: oldBlocks.map { Self.reminderIdentifier(for: $0.id) })
+            blocksDraft.removeAll { $0.taskId == task.id }
+
+            let newBlock = ScheduleBlock(
+                taskId: task.id,
+                startAt: startAt,
+                endAt: endAt,
+                source: .auto,
+                createdAt: now,
+                updatedAt: now
+            )
+            blocksDraft.append(newBlock)
+
+            tasksDraft[tIdx].isScheduled = true
+            tasksDraft[tIdx].scheduleBlockId = newBlock.id
+            tasksDraft[tIdx].updatedAt = now
+
+            let interval = (start: startAt, end: endAt)
+            occupiedIntervals.append(interval)
+            merged = BasicSchedulingPlanner.mergedOccupiedIntervals(occupiedIntervals)
+
+            cursor = endAt
+        }
+
+        do {
+            try storage.saveScheduleBlocks(blocksDraft)
+            try storage.saveTasks(tasksDraft)
+        } catch {
+            record(error)
+            scheduleExecutionState = .failure("Could not save schedule. Please try again.")
+            return
+        }
+
+        scheduleBlocks = blocksDraft
+        tasks = tasksDraft
+        notificationService.cancelNotifications(identifiers: cancelledReminderIds)
+        reconcileSelectionAfterDateChange()
+        scheduleExecutionState = .success
+
+        Task { [weak self] in
+            guard let self else { return }
+            await self.refreshTaskRemindersForToday()
         }
     }
 
@@ -1689,6 +1781,8 @@ enum TodaySummaryState: Equatable {
     case generating
     case streaming
     case success
+    /// 无 API Key 且需要生成总结时的轻量提示（不视为错误）。
+    case needsAPIKeyForWrapUp
     case failure(String)
 
     static func == (lhs: TodaySummaryState, rhs: TodaySummaryState) -> Bool {
@@ -1697,7 +1791,8 @@ enum TodaySummaryState: Equatable {
              (.loadingSavedSummary, .loadingSavedSummary),
              (.generating, .generating),
              (.streaming, .streaming),
-             (.success, .success):
+             (.success, .success),
+             (.needsAPIKeyForWrapUp, .needsAPIKeyForWrapUp):
             return true
         case (.failure(let l), .failure(let r)):
             return l == r

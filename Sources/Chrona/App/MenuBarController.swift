@@ -16,6 +16,25 @@ final class MainWindowOpener {
     }
 }
 
+private enum ChronaMenuBarIcon {
+    /// 菜单栏状态项内绘制尺寸（pt）；略小于 `squareLength` 留白，比 16pt 更易辨认。
+    static let statusItemImagePoints: CGFloat = 24
+
+    static func applicationIconForStatusItem() -> NSImage? {
+        let raw = NSWorkspace.shared.icon(forFile: Bundle.main.bundleURL.path)
+        let s = NSSize(width: statusItemImagePoints, height: statusItemImagePoints)
+        return NSImage(size: s, flipped: false) { rect in
+            raw.draw(
+                in: rect,
+                from: NSRect(origin: .zero, size: raw.size),
+                operation: .copy,
+                fraction: 1
+            )
+            return true
+        }
+    }
+}
+
 final class MenuBarController: NSObject, ObservableObject {
     private var statusItem: NSStatusItem?
 
@@ -24,8 +43,9 @@ final class MenuBarController: NSObject, ObservableObject {
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = item.button {
-            button.image = NSImage(systemSymbolName: "clock.fill", accessibilityDescription: "Chrona")
+            button.image = ChronaMenuBarIcon.applicationIconForStatusItem()
             button.imagePosition = .imageOnly
+            button.toolTip = "Chrona"
             button.target = self
             button.action = #selector(handleStatusItemClick)
         }

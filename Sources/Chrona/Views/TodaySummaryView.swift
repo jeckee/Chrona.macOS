@@ -3,6 +3,8 @@ import SwiftUI
 struct TodaySummaryView: View {
     @EnvironmentObject private var chronaStore: ChronaStore
 
+    private static let dailyWrapUpNeedsAPIKeyMessage = "Daily wrap-up requires an API key."
+
     private static let subtitleFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = .current
@@ -18,7 +20,7 @@ struct TodaySummaryView: View {
     private var refreshDisabled: Bool {
         if !chronaStore.canRegenerateDailySummary { return true }
         switch chronaStore.todaySummaryState {
-        case .generating, .streaming, .loadingSavedSummary:
+        case .generating, .streaming, .loadingSavedSummary, .needsAPIKeyForWrapUp:
             return true
         default:
             return false
@@ -105,6 +107,8 @@ struct TodaySummaryView: View {
             return "Streaming…"
         case .success:
             return "Summary is ready."
+        case .needsAPIKeyForWrapUp:
+            return Self.dailyWrapUpNeedsAPIKeyMessage
         case .failure(let message):
             return message
         }
@@ -147,6 +151,20 @@ struct TodaySummaryView: View {
                     Text("Saved.")
                         .font(ChronaTokens.Typography.caption)
                         .foregroundStyle(ChronaTokens.Colors.success)
+                }
+            case .needsAPIKeyForWrapUp:
+                if chronaStore.todaySummaryContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    EmptyView()
+                } else {
+                    HStack(alignment: .top, spacing: ChronaTokens.Space.sm) {
+                        Image(systemName: "key.horizontal")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(ChronaTokens.Colors.subtext)
+                        Text(Self.dailyWrapUpNeedsAPIKeyMessage)
+                            .font(ChronaTokens.Typography.caption)
+                            .foregroundStyle(ChronaTokens.Colors.subtext)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             case .failure(let message):
                 HStack(spacing: ChronaTokens.Space.sm) {

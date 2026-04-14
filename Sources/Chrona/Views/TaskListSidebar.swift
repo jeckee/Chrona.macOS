@@ -2,7 +2,9 @@ import SwiftUI
 
 struct TaskListSidebar: View {
     @EnvironmentObject private var chronaStore: ChronaStore
+    @Environment(\.openWindow) private var openWindow
     @State private var quickAddText: String = ""
+    @State private var isScheduleWithoutAIConfirmationPresented = false
 
     private static let monthDayFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -133,6 +135,19 @@ struct TaskListSidebar: View {
                 .fill(ChronaTokens.Colors.border)
                 .frame(width: ChronaTokens.Surface.strokeWidth)
         }
+        .confirmationDialog(
+            "AI scheduling requires an API key.",
+            isPresented: $isScheduleWithoutAIConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Go to Settings") {
+                openWindow(id: ChronaWindowID.settings)
+            }
+            Button("Continue with basic scheduling") {
+                chronaStore.performBasicScheduling()
+            }
+            Button("Cancel", role: .cancel) {}
+        }
     }
 
     private var rowInsets: EdgeInsets {
@@ -190,8 +205,12 @@ struct TaskListSidebar: View {
                 Spacer(minLength: ChronaTokens.Space.xs)
 
                 Button {
-                    Task {
-                        await chronaStore.scheduleCurrentDay()
+                    if chronaStore.isAIAvailable {
+                        Task {
+                            await chronaStore.scheduleCurrentDay()
+                        }
+                    } else {
+                        isScheduleWithoutAIConfirmationPresented = true
                     }
                 } label: {
                     HStack(spacing: ChronaTokens.Space.sm) {
@@ -215,7 +234,11 @@ struct TaskListSidebar: View {
                 }
                 .buttonStyle(.chronaHeaderPairedSecondary)
                 .disabled(chronaStore.isScheduling)
-                .help("Use one AI call to complete and schedule today's tasks")
+                .help(
+                    chronaStore.isAIAvailable
+                        ? "Use one AI call to complete and schedule today's tasks"
+                        : "Schedule today with AI (needs API key) or basic priority scheduling"
+                )
 
                 Button {
                     chronaStore.showTodaySummary()

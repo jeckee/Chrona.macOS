@@ -3,16 +3,20 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4FC2D4CF2F813D1000BD44C1 /* Chrona in Frameworks */ = {isa = PBXBuildFile; productRef = C01A0000000000000000000C /* Chrona */; };
 		C01A00000000000000000001 /* ChronaMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01A00000000000000000002 /* ChronaMacApp.swift */; };
+		C01A00000000000000000015 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C01A00000000000000000014 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		C01A00000000000000000002 /* ChronaMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChronaMacApp.swift; sourceTree = "<group>"; };
 		C01A00000000000000000003 /* Chrona.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Chrona.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C01A00000000000000000014 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		C01A00000000000000000017 /* ChronaApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ChronaApp.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -20,6 +24,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4FC2D4CF2F813D1000BD44C1 /* Chrona in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -38,6 +43,8 @@
 			isa = PBXGroup;
 			children = (
 				C01A00000000000000000002 /* ChronaMacApp.swift */,
+				C01A00000000000000000014 /* Assets.xcassets */,
+				C01A00000000000000000017 /* ChronaApp.entitlements */,
 			);
 			path = ChronaApp;
 			sourceTree = "<group>";
@@ -83,7 +90,7 @@
 				LastSwiftUpdateCheck = 1500;
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
-					C01A00000000000000000008 /* ChronaApp */ = {
+					C01A00000000000000000008 = {
 						CreatedOnToolsVersion = 15.0;
 					};
 				};
@@ -98,7 +105,7 @@
 			);
 			mainGroup = C01A00000000000000000005;
 			packageReferences = (
-				C01A0000000000000000000F /* XCLocalSwiftPackageReference */,
+				C01A0000000000000000000F /* XCLocalSwiftPackageReference "." */,
 			);
 			productRefGroup = C01A00000000000000000007 /* Products */;
 			projectDirPath = "";
@@ -114,6 +121,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C01A00000000000000000015 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -252,20 +260,24 @@
 		C01A00000000000000000012 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ChronaApp/ChronaApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
-				ENABLE_APP_SANDBOX = NO;
+				DEVELOPMENT_TEAM = 6KPM5T65HS;
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.chrona.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chrona.mac;
 				PRODUCT_MODULE_NAME = ChronaApp;
 				PRODUCT_NAME = Chrona;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -276,22 +288,30 @@
 		C01A00000000000000000013 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ChronaApp/ChronaApp.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
-				ENABLE_APP_SANDBOX = NO;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 6KPM5T65HS;
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.chrona.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chrona.mac;
 				PRODUCT_MODULE_NAME = ChronaApp;
 				PRODUCT_NAME = Chrona;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -300,15 +320,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		C01A0000000000000000000E /* Build configuration list for PBXProject "Chrona" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				C01A00000000000000000010 /* Debug */,
-				C01A00000000000000000011 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		C01A00000000000000000009 /* Build configuration list for PBXNativeTarget "ChronaApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -318,10 +329,19 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		C01A0000000000000000000E /* Build configuration list for PBXProject "Chrona" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C01A00000000000000000010 /* Debug */,
+				C01A00000000000000000011 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		C01A0000000000000000000F /* XCLocalSwiftPackageReference */ = {
+		C01A0000000000000000000F /* XCLocalSwiftPackageReference "." */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = .;
 		};
@@ -330,7 +350,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		C01A0000000000000000000C /* Chrona */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = C01A0000000000000000000F /* XCLocalSwiftPackageReference */;
+			package = C01A0000000000000000000F /* XCLocalSwiftPackageReference "." */;
 			productName = Chrona;
 		};
 /* End XCSwiftPackageProductDependency section */
