@@ -3,8 +3,6 @@ import SwiftUI
 struct WorkingHoursSection: View {
     @ObservedObject var store: ChronaSettingsStore
 
-    private let labelGray = Color(red: 136 / 255, green: 136 / 255, blue: 136 / 255)
-
     var body: some View {
         VStack(alignment: .leading, spacing: ChronaTokens.Space.lg + ChronaTokens.Space.xs) {
             sectionHeader
@@ -65,7 +63,7 @@ struct WorkingHoursSection: View {
 
             Text("–")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(labelGray)
+                .foregroundStyle(ChronaTokens.Colors.subtext)
 
             DatePicker(
                 "",

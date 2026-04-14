@@ -1,5 +1,24 @@
 import Foundation
 
+enum AppearanceMode: String, Codable, CaseIterable, Equatable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system:
+            return "Follow System"
+        case .light:
+            return "Light"
+        case .dark:
+            return "Dark"
+        }
+    }
+}
+
 // MARK: - WorkingTimeRange
 
 /// 每日工作时间模板中的一个时间段，用分钟数表示（0 = 00:00, 540 = 09:00, 1080 = 18:00）。
@@ -104,6 +123,7 @@ struct AppSettings: Equatable {
     var selectedProvider: AIProvider
     var selectedModelId: String
     var providerAPIKeys: ProviderAPIKeys
+    var appearanceMode: AppearanceMode
     var workingHours: WorkingHoursSetting
     var reminderMinutesBefore: Int
     var taskReminderEnabled: Bool
@@ -112,6 +132,7 @@ struct AppSettings: Equatable {
         selectedProvider: AIProvider = .openai,
         selectedModelId: String = AIProvider.openai.defaultModelId,
         providerAPIKeys: ProviderAPIKeys = ProviderAPIKeys(),
+        appearanceMode: AppearanceMode = .system,
         workingHours: WorkingHoursSetting = .default,
         reminderMinutesBefore: Int = 10,
         taskReminderEnabled: Bool = true
@@ -119,6 +140,7 @@ struct AppSettings: Equatable {
         self.selectedProvider = selectedProvider
         self.selectedModelId = selectedModelId
         self.providerAPIKeys = providerAPIKeys
+        self.appearanceMode = appearanceMode
         self.workingHours = workingHours
         self.reminderMinutesBefore = reminderMinutesBefore
         self.taskReminderEnabled = taskReminderEnabled
@@ -148,6 +170,7 @@ extension AppSettings: Codable {
         case selectedModelId
         case apiKey
         case providerAPIKeys
+        case appearanceMode
         case workingHours
         case reminderMinutesBefore
         case taskReminderEnabled
@@ -182,6 +205,7 @@ extension AppSettings: Codable {
         }
 
         self.providerAPIKeys = keys
+        self.appearanceMode = (try? c.decode(AppearanceMode.self, forKey: .appearanceMode)) ?? defaults.appearanceMode
         self.workingHours = (try? c.decode(WorkingHoursSetting.self, forKey: .workingHours)) ?? defaults.workingHours
         self.reminderMinutesBefore = (try? c.decode(Int.self, forKey: .reminderMinutesBefore)) ?? defaults.reminderMinutesBefore
         self.taskReminderEnabled = (try? c.decode(Bool.self, forKey: .taskReminderEnabled)) ?? defaults.taskReminderEnabled
@@ -192,6 +216,7 @@ extension AppSettings: Codable {
         try c.encode(selectedProvider, forKey: .selectedProvider)
         try c.encode(selectedModelId, forKey: .selectedModelId)
         try c.encode(providerAPIKeys, forKey: .providerAPIKeys)
+        try c.encode(appearanceMode, forKey: .appearanceMode)
         try c.encode(workingHours, forKey: .workingHours)
         try c.encode(reminderMinutesBefore, forKey: .reminderMinutesBefore)
         try c.encode(taskReminderEnabled, forKey: .taskReminderEnabled)

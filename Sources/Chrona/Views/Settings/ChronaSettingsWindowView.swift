@@ -5,7 +5,6 @@ struct ChronaSettingsWindowView: View {
     @ObservedObject var store: ChronaSettingsStore
     @EnvironmentObject private var chronaStore: ChronaStore
 
-    private let shellFill = Color(red: 247 / 255, green: 247 / 255, blue: 248 / 255)
     private let contentMaxWidth: CGFloat = 576
 
     var body: some View {
@@ -15,6 +14,8 @@ struct ChronaSettingsWindowView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: ChronaTokens.Space.lg + ChronaTokens.Space.sm) {
                     switch store.selectedPane {
+                    case .appearance:
+                        AppearanceSection(store: store)
                     case .aiModel:
                         AIModelSection(store: store)
                     case .workingHours:
@@ -31,7 +32,7 @@ struct ChronaSettingsWindowView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(shellFill)
+        .background(ChronaTokens.Colors.canvas)
         .chronaSettingsWindowChrome()
         .onAppear {
             store.bind(chronaStore: chronaStore)

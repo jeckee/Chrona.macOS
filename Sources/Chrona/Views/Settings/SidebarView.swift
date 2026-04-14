@@ -5,13 +5,12 @@ struct SidebarView: View {
     @Binding var selection: ChronaSettingsPane
 
     private let sidebarWidth: CGFloat = 208
-    private let titleColor = Color(red: 134 / 255, green: 134 / 255, blue: 139 / 255)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Settings")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(titleColor)
+                .foregroundStyle(ChronaTokens.Colors.subtext)
                 .padding(.horizontal, ChronaTokens.Space.lg)
                 .padding(.bottom, ChronaTokens.Space.md)
 

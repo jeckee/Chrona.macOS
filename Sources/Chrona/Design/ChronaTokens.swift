@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// 设计令牌：间距仅用 xs / sm / md / lg / xl。
@@ -26,39 +27,59 @@ enum ChronaTokens {
     }
 
     enum Colors {
+        private static func dynamic(light: NSColor, dark: NSColor) -> Color {
+            Color(
+                nsColor: NSColor(name: nil) { appearance in
+                    appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+                }
+            )
+        }
+
         /// Figma 主色 `#0A7AFF`。
         static let primary = Color(red: 10 / 255, green: 122 / 255, blue: 255 / 255)
-        static let primarySoft = Color(red: 10 / 255, green: 122 / 255, blue: 255 / 255, opacity: 0.12)
+        static let primarySoft = dynamic(
+            light: NSColor(red: 10 / 255, green: 122 / 255, blue: 255 / 255, alpha: 0.12),
+            dark: NSColor(red: 10 / 255, green: 122 / 255, blue: 255 / 255, alpha: 0.26)
+        )
         static let primaryHover = Color(red: 0 / 255, green: 102 / 255, blue: 223 / 255)
         /// 进行中卡片底色 `#E6F2FF`。
-        static let primaryCardTint = Color(red: 230 / 255, green: 242 / 255, blue: 255 / 255)
+        static let primaryCardTint = dynamic(
+            light: NSColor(red: 230 / 255, green: 242 / 255, blue: 255 / 255, alpha: 1),
+            dark: NSColor(red: 28 / 255, green: 46 / 255, blue: 72 / 255, alpha: 1)
+        )
         static let primaryMuted = Color(red: 10 / 255, green: 122 / 255, blue: 255 / 255, opacity: 0.8)
         static let primaryOutline = Color(red: 10 / 255, green: 122 / 255, blue: 255 / 255, opacity: 0.2)
         static let primaryWash = Color(red: 10 / 255, green: 122 / 255, blue: 255 / 255, opacity: 0.05)
-        static let primarySummaryTint = Color(red: 10 / 255, green: 122 / 255, blue: 255 / 255, opacity: 0.1)
+        static let primarySummaryTint = dynamic(
+            light: NSColor(red: 10 / 255, green: 122 / 255, blue: 255 / 255, alpha: 0.1),
+            dark: NSColor(red: 10 / 255, green: 122 / 255, blue: 255 / 255, alpha: 0.18)
+        )
         /// Figma 冲突/强调橙 `#FF9500`。
         static let warning = Color(red: 255 / 255, green: 149 / 255, blue: 0 / 255)
-        static let warningSoft = Color(red: 255 / 255, green: 244 / 255, blue: 229 / 255)
+        static let warningSoft = dynamic(
+            light: NSColor(red: 255 / 255, green: 244 / 255, blue: 229 / 255, alpha: 1),
+            dark: NSColor(red: 64 / 255, green: 45 / 255, blue: 21 / 255, alpha: 1)
+        )
         static let warningHover = Color(red: 230 / 255, green: 126 / 255, blue: 0 / 255)
         static let warningMuted = Color(red: 255 / 255, green: 149 / 255, blue: 0 / 255, opacity: 0.8)
         static let warningOutline = Color(red: 255 / 255, green: 149 / 255, blue: 0 / 255, opacity: 0.2)
-        static let text = Color(red: 29 / 255, green: 29 / 255, blue: 31 / 255)
-        static let subtext = Color(red: 134 / 255, green: 134 / 255, blue: 139 / 255)
-        static let border = Color(red: 229 / 255, green: 229 / 255, blue: 234 / 255)
-        static let borderHairline = Color(red: 229 / 255, green: 229 / 255, blue: 234 / 255, opacity: 0.5)
-        static let bg = Color(red: 1, green: 1, blue: 1)
-        static let bgSoft = Color(red: 242 / 255, green: 242 / 255, blue: 247 / 255)
-        static let bgSoftHover = Color(red: 235 / 255, green: 235 / 255, blue: 240 / 255)
+        static let text = Color(nsColor: .labelColor)
+        static let subtext = Color(nsColor: .secondaryLabelColor)
+        static let border = Color(nsColor: .separatorColor)
+        static let borderHairline = Color(nsColor: .separatorColor).opacity(0.55)
+        static let bg = dynamic(light: .textBackgroundColor, dark: .controlBackgroundColor)
+        static let bgSoft = dynamic(light: .controlBackgroundColor, dark: NSColor(calibratedWhite: 0.19, alpha: 1))
+        static let bgSoftHover = dynamic(light: NSColor(calibratedWhite: 0.92, alpha: 1), dark: NSColor(calibratedWhite: 0.24, alpha: 1))
         /// 主画布 `#F5F5F7`。
-        static let canvas = Color(red: 245 / 255, green: 245 / 255, blue: 247 / 255)
-        static let onFill = bg
+        static let canvas = Color(nsColor: .windowBackgroundColor)
+        static let onFill = Color.white
         static let selectionStroke = Color(red: 10 / 255, green: 122 / 255, blue: 255 / 255, opacity: 0.45)
         static let success = Color(red: 52 / 255, green: 199 / 255, blue: 89 / 255)
         static let aiCardBorder = Color(red: 10 / 255, green: 122 / 255, blue: 255 / 255, opacity: 0.1)
     }
 
     enum Elevation {
-        static let cardShadowColor = Color(red: 0, green: 0, blue: 0, opacity: 0.05)
+        static let cardShadowColor = Color.black.opacity(0.14)
         static let cardShadowRadius: CGFloat = 2
         static let cardShadowY: CGFloat = 1
     }
@@ -77,7 +98,7 @@ enum ChronaTokens {
         static let aiSuggestionPanel = LinearGradient(
             colors: [
                 ChronaTokens.Colors.bg,
-                Color(red: 230 / 255, green: 242 / 255, blue: 255 / 255, opacity: 0.3),
+                ChronaTokens.Colors.primarySoft,
             ],
             startPoint: UnitPoint(x: 0.08, y: 0),
             endPoint: UnitPoint(x: 0.92, y: 1)

@@ -1,6 +1,7 @@
 import Foundation
 
 enum ChronaSettingsPane: String, CaseIterable, Identifiable {
+    case appearance
     case aiModel
     case workingHours
     case reminders
@@ -9,6 +10,7 @@ enum ChronaSettingsPane: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .appearance: return "Appearance"
         case .aiModel: return "AI Model"
         case .workingHours: return "Working Hours"
         case .reminders: return "Reminders"
@@ -17,6 +19,7 @@ enum ChronaSettingsPane: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
+        case .appearance: return "circle.lefthalf.filled"
         case .aiModel: return "brain.head.profile"
         case .workingHours: return "clock"
         case .reminders: return "bell"

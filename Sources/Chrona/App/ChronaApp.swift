@@ -19,6 +19,7 @@ public struct ChronaMainScene: Scene {
             Window("Chrona", id: ChronaWindowID.main) {
                 ContentView()
                     .environmentObject(chronaStore)
+                    .preferredColorScheme(chronaStore.preferredColorScheme)
                     .onAppear {
                         if !chronaStore.isLoaded {
                             chronaStore.loadInitialData()
@@ -35,6 +36,7 @@ public struct ChronaMainScene: Scene {
             Window("Settings", id: ChronaWindowID.settings) {
                 ChronaSettingsWindowView(store: settingsStore)
                     .environmentObject(chronaStore)
+                    .preferredColorScheme(chronaStore.preferredColorScheme)
             }
             .defaultSize(width: 800, height: 620)
         }

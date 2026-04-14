@@ -3,8 +3,6 @@ import SwiftUI
 struct RemindersSection: View {
     @ObservedObject var store: ChronaSettingsStore
 
-    private let labelGray = Color(red: 136 / 255, green: 136 / 255, blue: 136 / 255)
-
     var body: some View {
         VStack(alignment: .leading, spacing: ChronaTokens.Space.lg + ChronaTokens.Space.xs) {
             sectionHeader
@@ -64,14 +62,14 @@ struct RemindersSection: View {
                     .foregroundStyle(ChronaTokens.Colors.text)
                 Text(subtitle)
                     .font(ChronaTokens.Typography.caption)
-                    .foregroundStyle(labelGray)
+                    .foregroundStyle(ChronaTokens.Colors.subtext)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: ChronaTokens.Space.sm) {
                 Text("Before")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(labelGray)
+                    .foregroundStyle(ChronaTokens.Colors.subtext)
                 Picker("", selection: leadSelection) {
                     ForEach(ChronaTaskReminderLead.allCases) { lead in
                         Text(lead.rawValue.replacingOccurrences(of: "Before ", with: "")).tag(lead)

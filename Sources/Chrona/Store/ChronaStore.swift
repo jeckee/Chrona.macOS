@@ -418,6 +418,16 @@ final class ChronaStore: ObservableObject {
 
     /// 当前设置下是否可调用 LLM（Provider 可用且对应 API Key 已填写）。
     var isAIAvailable: Bool { settings.isAIAvailable }
+    var preferredColorScheme: ColorScheme? {
+        switch settings.appearanceMode {
+        case .system:
+            return nil
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        }
+    }
     var canChangeTaskStatus: Bool { selectedDateKind == .today }
     var canEditConclusion: Bool { selectedDateKind == .today }
     var canEditTaskCoreFields: Bool { selectedDateKind != .past }

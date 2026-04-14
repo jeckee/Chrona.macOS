@@ -6,6 +6,7 @@ final class ChronaSettingsStore: ObservableObject {
     @Published var selectedPane: ChronaSettingsPane = .aiModel
 
     @Published var providerKeys: ProviderAPIKeys = ProviderAPIKeys()
+    @Published var appearanceMode: AppearanceMode = .system
 
     @Published var provider: AIProvider = .openai {
         willSet {
@@ -136,6 +137,7 @@ final class ChronaSettingsStore: ObservableObject {
             $model.map { _ in () }.eraseToAnyPublisher(),
             $apiKey.map { _ in () }.eraseToAnyPublisher(),
             $providerKeys.map { _ in () }.eraseToAnyPublisher(),
+            $appearanceMode.map { _ in () }.eraseToAnyPublisher(),
             $provider.map { _ in () }.eraseToAnyPublisher(),
             $timeRanges.map { _ in () }.eraseToAnyPublisher(),
             $taskReminderLead.map { _ in () }.eraseToAnyPublisher(),
@@ -161,6 +163,7 @@ final class ChronaSettingsStore: ObservableObject {
     private func applyAppSettingsToUI(_ app: AppSettings) {
         model = app.selectedModelId
         providerKeys = app.providerAPIKeys
+        appearanceMode = app.appearanceMode
         provider = app.selectedProvider
         apiKey = providerKeys.key(for: app.selectedProvider)
         timeRanges = app.workingHours.ranges.map {
@@ -199,6 +202,7 @@ final class ChronaSettingsStore: ObservableObject {
             selectedProvider: provider,
             selectedModelId: model,
             providerAPIKeys: keys,
+            appearanceMode: appearanceMode,
             workingHours: WorkingHoursSetting(ranges: ranges),
             reminderMinutesBefore: Self.reminderMinutes(from: taskReminderLead),
             taskReminderEnabled: taskReminderEnabled

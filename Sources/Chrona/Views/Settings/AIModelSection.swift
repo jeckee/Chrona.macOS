@@ -3,8 +3,6 @@ import SwiftUI
 struct AIModelSection: View {
     @ObservedObject var store: ChronaSettingsStore
 
-    private let labelGray = Color(red: 136 / 255, green: 136 / 255, blue: 136 / 255)
-
     var body: some View {
         VStack(alignment: .leading, spacing: ChronaTokens.Space.lg + ChronaTokens.Space.xs) {
             sectionHeader
@@ -56,7 +54,7 @@ struct AIModelSection: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Provider")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(labelGray)
+                .foregroundStyle(ChronaTokens.Colors.subtext)
             Menu {
                 ForEach(AIProvider.allCases) { p in
                     Button(p.displayName) {
@@ -77,7 +75,7 @@ struct AIModelSection: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Model")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(labelGray)
+                .foregroundStyle(ChronaTokens.Colors.subtext)
             Menu {
                 ForEach(store.modelPickerOptions, id: \.self) { m in
                     Button(m) {
@@ -111,7 +109,7 @@ struct AIModelSection: View {
         VStack(alignment: .leading, spacing: ChronaTokens.Space.sm) {
             Text("API Key")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(labelGray)
+                .foregroundStyle(ChronaTokens.Colors.subtext)
 
             HStack(spacing: ChronaTokens.Space.sm) {
                 Group {
@@ -155,7 +153,7 @@ struct AIModelSection: View {
                     .controlSize(.small)
                 Text("Testing…")
                     .font(ChronaTokens.Typography.captionMedium)
-                    .foregroundStyle(labelGray)
+                    .foregroundStyle(ChronaTokens.Colors.subtext)
             }
         case .success(let message):
             HStack(spacing: ChronaTokens.Space.sm) {
